@@ -16,7 +16,29 @@
                 <Separator />
                 <MenuItem Header="E_xit" Click="MenuExit_Click" />
             </MenuItem>
-            <MenuItem Header="_Settings">
+            <MenuItem Header="_Radio">
+                <MenuItem Name="MenuDualWatch" Header="_Dual Watch" Click="MenuDualWatch_Click" IsEnabled="False">
+                    <MenuItem.Icon>
+                        <CheckBox Name="DualWatchCheck" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Name="MenuScan" Header="_Scan" Click="MenuScan_Click" IsEnabled="False">
+                    <MenuItem.Icon>
+                        <CheckBox Name="ScanCheck" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Name="MenuGpsEnabled" Header="_GPS Enabled" Click="MenuGpsEnabled_Click" IsEnabled="False">
+                    <MenuItem.Icon>
+                        <CheckBox Name="GpsEnabledCheck" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Name="MenuAudioEnabled" Header="_Audio Enabled" Click="MenuAudioEnabled_Click" IsEnabled="False">
+                    <MenuItem.Icon>
+                        <CheckBox Name="AudioEnabledCheck" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
                 <MenuItem Name="MenuExportChannels" Header="_Export Channels..." Click="MenuExportChannels_Click" IsEnabled="False" />
                 <MenuItem Name="MenuImportChannels" Header="_Import Channels..." Click="MenuImportChannels_Click" />
             </MenuItem>
@@ -27,8 +49,9 @@
                     </MenuItem.Icon>
                 </MenuItem>
             </MenuItem>
-            <MenuItem Header="_About">
+            <MenuItem Header="_Help">
                 <MenuItem Name="MenuRadioInfo" Header="Radio _Information..." Click="MenuRadioInfo_Click" IsEnabled="False" />
+                <MenuItem Name="MenuGpsInfo" Header="_GPS Information..." Click="MenuGpsInfo_Click" IsEnabled="False" />
                 <Separator />
                 <MenuItem Header="_About HTCommander..." Click="MenuAbout_Click" />
             </MenuItem>

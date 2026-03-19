@@ -99,7 +99,12 @@ namespace HTCommander.Desktop
                         DisconnectButton.IsEnabled = true;
                         MenuDisconnect.IsEnabled = true;
                         MenuRadioInfo.IsEnabled = true;
+                        MenuGpsInfo.IsEnabled = true;
                         MenuExportChannels.IsEnabled = true;
+                        MenuDualWatch.IsEnabled = true;
+                        MenuScan.IsEnabled = true;
+                        MenuGpsEnabled.IsEnabled = true;
+                        MenuAudioEnabled.IsEnabled = true;
                         activeDeviceId = deviceId;
                         if (RadioPanelCheck.IsChecked == true) RadioPanel.IsVisible = true;
                         RadioStateText.Text = "Connected";
@@ -119,7 +124,12 @@ namespace HTCommander.Desktop
                         DisconnectButton.IsEnabled = false;
                         MenuDisconnect.IsEnabled = false;
                         MenuRadioInfo.IsEnabled = false;
+                        MenuGpsInfo.IsEnabled = false;
                         MenuExportChannels.IsEnabled = false;
+                        MenuDualWatch.IsEnabled = false;
+                        MenuScan.IsEnabled = false;
+                        MenuGpsEnabled.IsEnabled = false;
+                        MenuAudioEnabled.IsEnabled = false;
                         BatteryStatusText.Text = "";
                         if (deviceId == activeDeviceId)
                         {
@@ -195,6 +205,8 @@ namespace HTCommander.Desktop
             Dispatcher.UIThread.Post(() =>
             {
                 SquelchText.Text = settings.squelch_level.ToString();
+                DualWatchCheck.IsChecked = settings.double_channel == 1;
+                ScanCheck.IsChecked = settings.scan;
                 UpdateVfoDisplay();
                 UpdateChannelList();
             });
@@ -475,14 +487,92 @@ namespace HTCommander.Desktop
             }
         }
 
-        private void MenuExportChannels_Click(object sender, RoutedEventArgs e)
+        private void MenuDualWatch_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Export channels
+            if (activeDeviceId < 0 || currentSettings == null) return;
+            bool newDualWatch = currentSettings.double_channel != 1;
+            DataBroker.Dispatch(activeDeviceId, "DualWatch", newDualWatch, store: false);
         }
 
-        private void MenuImportChannels_Click(object sender, RoutedEventArgs e)
+        private void MenuScan_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Import channels
+            if (activeDeviceId < 0 || currentSettings == null) return;
+            bool newScan = !currentSettings.scan;
+            DataBroker.Dispatch(activeDeviceId, "Scan", newScan, store: false);
+        }
+
+        private void MenuGpsEnabled_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0) return;
+            bool currently = GpsEnabledCheck.IsChecked == true;
+            DataBroker.Dispatch(activeDeviceId, "SetGPS", !currently, store: false);
+            GpsEnabledCheck.IsChecked = !currently;
+        }
+
+        private void MenuAudioEnabled_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0) return;
+            bool currently = DataBroker.GetValue<bool>(activeDeviceId, "AudioState", false);
+            DataBroker.Dispatch(activeDeviceId, "SetAudio", !currently, store: false);
+            AudioEnabledCheck.IsChecked = !currently;
+        }
+
+        private async void MenuExportChannels_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0 || currentChannels == null) return;
+
+            var picker = Program.PlatformServices?.FilePicker;
+            if (picker == null) return;
+
+            string path = await picker.SaveFileAsync("Export Channels", "channels.csv",
+                new[] { "CSV Files|*.csv", "All Files|*.*" });
+            if (path == null) return;
+
+            try
+            {
+                string content = ImportUtils.ExportToChirpFormat(currentChannels);
+                System.IO.File.WriteAllText(path, content);
+                broker.LogInfo($"Channels exported to {path}");
+            }
+            catch (Exception ex)
+            {
+                broker.LogError($"Export failed: {ex.Message}");
+            }
+        }
+
+        private async void MenuImportChannels_Click(object sender, RoutedEventArgs e)
+        {
+            var picker = Program.PlatformServices?.FilePicker;
+            if (picker == null) return;
+
+            string path = await picker.PickFileAsync("Import Channels",
+                new[] { "CSV Files|*.csv", "All Files|*.*" });
+            if (path == null) return;
+
+            try
+            {
+                RadioChannelInfo[] channels = ImportUtils.ParseChannelsFromFile(path);
+                if (channels == null || channels.Length == 0)
+                {
+                    broker.LogInfo("No channels found in file.");
+                    return;
+                }
+
+                var dialog = new Dialogs.ImportChannelsDialog(activeDeviceId >= 0 ? activeDeviceId : -1, channels);
+                await dialog.ShowDialog(this);
+                broker.LogInfo($"Imported {channels.Length} channels from {path}");
+            }
+            catch (Exception ex)
+            {
+                broker.LogError($"Import failed: {ex.Message}");
+            }
+        }
+
+        private async void MenuGpsInfo_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0) return;
+            var dialog = new Dialogs.GpsDetailsDialog(activeDeviceId);
+            await dialog.ShowDialog(this);
         }
 
         private void MenuRadioPanel_Click(object sender, RoutedEventArgs e)
