@@ -190,7 +190,19 @@
                         <!-- Channel list -->
                         <TextBlock Text="Channels" FontSize="12" Foreground="#888" FontWeight="SemiBold" Margin="0,4,0,2" />
                         <ListBox Name="ChannelList" DoubleTapped="ChannelList_DoubleTapped"
-                                 Background="Transparent" Padding="0">
+                                 Background="Transparent" Padding="0" BorderThickness="0">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="MinHeight" Value="0" />
+                                </Style>
+                                <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="#33FFFFFF" />
+                                </Style>
+                                <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="#1AFFFFFF" />
+                                </Style>
+                            </ListBox.Styles>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border Margin="0,1" Padding="6,3" CornerRadius="3"

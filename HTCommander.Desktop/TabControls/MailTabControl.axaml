@@ -27,7 +27,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Mailbox tree -->
-            <TreeView Name="MailboxTree" Grid.Column="0"
+            <TreeView Name="MailboxTree" Grid.Column="0" Background="#252526"
                       SelectionChanged="MailboxTree_SelectionChanged">
                 <TreeViewItem Header="Inbox" Tag="Inbox" IsExpanded="True" />
                 <TreeViewItem Header="Outbox" Tag="Outbox" />
@@ -37,7 +37,7 @@
                 <TreeViewItem Header="Trash" Tag="Trash" />
             </TreeView>
 
-            <GridSplitter Grid.Column="1" Width="5" />
+            <GridSplitter Grid.Column="1" Width="5" Background="#444" />
 
             <!-- Mail content -->
             <Grid Grid.Column="2">
@@ -56,7 +56,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" />
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="#444" />
 
                 <TextBox Name="MailPreview" Grid.Row="2" IsReadOnly="True"
                          AcceptsReturn="True" TextWrapping="Wrap"

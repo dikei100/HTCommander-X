@@ -32,7 +32,7 @@
             </StackPanel>
 
             <!-- Image preview -->
-            <Border Background="#F0F0F0" Height="200" CornerRadius="4">
+            <Border Background="#2D2D30" Height="200" CornerRadius="4">
                 <Image Name="PreviewImage" Stretch="Uniform" />
             </Border>
         </StackPanel>
