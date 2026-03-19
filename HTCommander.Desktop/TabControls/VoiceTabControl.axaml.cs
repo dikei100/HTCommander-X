@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using HTCommander.radio;
 
 namespace HTCommander.Desktop.TabControls
 {
@@ -189,13 +190,68 @@ namespace HTCommander.Desktop.TabControls
             if (ModeCombo.SelectedItem is ComboBoxItem item)
                 mode = item.Content?.ToString() ?? "Chat";
 
-            // TODO: Dispatch voice message based on mode
-            // For Chat mode, this would go through VoiceHandler
+            switch (mode)
+            {
+                case "Chat":
+                    broker.Dispatch(1, "Chat", text, store: false);
+                    break;
+                case "Speak":
+                    broker.Dispatch(1, "Speak", text, store: false);
+                    break;
+                case "Morse":
+                    broker.Dispatch(1, "Morse", text, store: false);
+                    break;
+                case "DTMF":
+                    // DTMF generates PCM locally and transmits to radio
+                    int targetDeviceId = GetVoiceTargetDeviceId();
+                    if (targetDeviceId < 0) break;
+                    byte[] pcm8 = DmtfEngine.GenerateDmtfPcm(text);
+                    byte[] pcm16 = new byte[pcm8.Length * 2];
+                    for (int i = 0; i < pcm8.Length; i++)
+                    {
+                        short s = (short)((pcm8[i] - 128) << 8);
+                        pcm16[i * 2] = (byte)(s & 0xFF);
+                        pcm16[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
+                    }
+                    broker.Dispatch(targetDeviceId, "TransmitVoicePCM", new { Data = pcm16, PlayLocally = true }, store: false);
+                    break;
+            }
         }
+
+        private int GetVoiceTargetDeviceId()
+        {
+            // Get the voice handler's target device ID
+            var state = DataBroker.GetValue<object>(1, "VoiceHandlerState", null);
+            if (state != null)
+            {
+                var prop = state.GetType().GetProperty("TargetDeviceId");
+                if (prop != null)
+                {
+                    object val = prop.GetValue(state);
+                    if (val is int id && id > 0) return id;
+                }
+            }
+            // Fallback: first connected radio
+            var radios = DataBroker.GetValue<object>(1, "ConnectedRadios", null);
+            if (radios is System.Collections.IEnumerable enumerable)
+            {
+                foreach (var item in enumerable)
+                {
+                    if (item == null) continue;
+                    var did = item.GetType().GetProperty("DeviceId")?.GetValue(item);
+                    if (did is int deviceId && deviceId > 0) return deviceId;
+                }
+            }
+            return -1;
+        }
+
+        private bool isRecording = false;
 
         private void RecordButton_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: Toggle recording state
+            isRecording = !isRecording;
+            broker.Dispatch(1, isRecording ? "RecordingEnable" : "RecordingDisable", null, store: false);
+            RecordButton.Content = isRecording ? "Stop" : "Record";
         }
     }
 }
