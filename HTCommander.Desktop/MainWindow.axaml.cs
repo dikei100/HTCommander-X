@@ -7,20 +7,35 @@ http://www.apache.org/licenses/LICENSE-2.0
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using HTCommander.Desktop.Dialogs;
 
 namespace HTCommander.Desktop
 {
+    public class ChannelDisplayItem
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Frequency { get; set; }
+        public IBrush Background { get; set; }
+        public IBrush NameColor { get; set; }
+    }
+
     public partial class MainWindow : Window
     {
         private DataBrokerClient broker;
         private List<Radio> connectedRadios = new List<Radio>();
         private const int StartingDeviceId = 100;
         private bool dataHandlersInitialized = false;
+        private int activeDeviceId = -1;
+        private RadioChannelInfo[] currentChannels;
+        private RadioSettings currentSettings;
+        private RadioHtStatus currentStatus;
 
         public MainWindow()
         {
@@ -37,6 +52,13 @@ namespace HTCommander.Desktop
             // Subscribe to radio state changes for status bar
             broker.Subscribe(DataBroker.AllDevices, "State", OnRadioStateChanged);
             broker.Subscribe(1, "ConnectedRadios", OnConnectedRadiosChanged);
+
+            // Subscribe to radio data for the info panel
+            broker.Subscribe(DataBroker.AllDevices, "HtStatus", OnHtStatusChanged);
+            broker.Subscribe(DataBroker.AllDevices, "Settings", OnSettingsChanged);
+            broker.Subscribe(DataBroker.AllDevices, "Channels", OnChannelsChanged);
+            broker.Subscribe(DataBroker.AllDevices, "BatteryAsPercentage", OnBatteryChanged);
+            broker.Subscribe(DataBroker.AllDevices, "FriendlyName", OnFriendlyNameChanged);
 
             broker.LogInfo("HTCommander Desktop (Avalonia) started. Ready to connect.");
         }
@@ -72,23 +94,40 @@ namespace HTCommander.Desktop
                         StatusText.Text = $"Radio {deviceId}: Connected";
                         ConnectButton.IsEnabled = true;
                         DisconnectButton.IsEnabled = true;
+                        activeDeviceId = deviceId;
+                        RadioPanel.IsVisible = true;
+                        RadioStateText.Text = "Connected";
+                        RadioStateText.Foreground = new SolidColorBrush(Color.Parse("#4CAF50"));
                         break;
                     case "Connecting":
                         StatusText.Text = $"Radio {deviceId}: Connecting...";
+                        RadioPanel.IsVisible = true;
+                        RadioStateText.Text = "Connecting...";
+                        RadioStateText.Foreground = new SolidColorBrush(Color.Parse("#FFC107"));
                         break;
                     case "Disconnected":
                         StatusText.Text = connectedRadios.Count > 0 ? $"Radio {deviceId}: Disconnected" : "Not connected";
                         ConnectButton.IsEnabled = true;
                         DisconnectButton.IsEnabled = false;
+                        if (deviceId == activeDeviceId)
+                        {
+                            activeDeviceId = -1;
+                            RadioPanel.IsVisible = false;
+                            currentChannels = null;
+                            currentSettings = null;
+                            currentStatus = null;
+                        }
                         break;
                     case "UnableToConnect":
                         StatusText.Text = $"Radio {deviceId}: Unable to connect";
                         ConnectButton.IsEnabled = true;
+                        RadioPanel.IsVisible = false;
                         ShowCantConnectDialog();
-                            break;
-                        case "BluetoothNotAvailable":
+                        break;
+                    case "BluetoothNotAvailable":
                         StatusText.Text = "Bluetooth not available";
                         ConnectButton.IsEnabled = true;
+                        RadioPanel.IsVisible = false;
                         ShowBluetoothActivateDialog();
                         break;
                 }
@@ -98,6 +137,143 @@ namespace HTCommander.Desktop
         private void OnConnectedRadiosChanged(int deviceId, string name, object data)
         {
             // Update the connected radios list in DataBroker
+        }
+
+        private void OnFriendlyNameChanged(int deviceId, string name, object data)
+        {
+            if (deviceId != activeDeviceId) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                RadioNameText.Text = data?.ToString() ?? "Radio";
+            });
+        }
+
+        private void OnHtStatusChanged(int deviceId, string name, object data)
+        {
+            if (data is not RadioHtStatus status) return;
+            if (activeDeviceId < 0) activeDeviceId = deviceId;
+            if (deviceId != activeDeviceId) return;
+            currentStatus = status;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                RssiBar.Value = status.rssi;
+                TxIndicatorFill.Background = status.is_in_tx ? Brushes.Red : new SolidColorBrush(Color.Parse("#333"));
+                GpsText.Text = status.is_gps_locked ? "Locked" : "No fix";
+                GpsText.Foreground = status.is_gps_locked ? Brushes.LimeGreen : new SolidColorBrush(Color.Parse("#E0E0E0"));
+                ScanText.Text = status.is_scan ? "Active" : "Off";
+                PowerText.Text = status.is_power_on ? "On" : "Off";
+
+                UpdateVfoDisplay();
+                UpdateChannelHighlights();
+            });
+        }
+
+        private void OnSettingsChanged(int deviceId, string name, object data)
+        {
+            if (data is not RadioSettings settings) return;
+            if (activeDeviceId < 0) activeDeviceId = deviceId;
+            if (deviceId != activeDeviceId) return;
+            currentSettings = settings;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                SquelchText.Text = settings.squelch_level.ToString();
+                UpdateVfoDisplay();
+                UpdateChannelList();
+            });
+        }
+
+        private void OnChannelsChanged(int deviceId, string name, object data)
+        {
+            if (data is not RadioChannelInfo[] channels) return;
+            if (activeDeviceId < 0) activeDeviceId = deviceId;
+            if (deviceId != activeDeviceId) return;
+            currentChannels = channels;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                UpdateVfoDisplay();
+                UpdateChannelList();
+            });
+        }
+
+        private void OnBatteryChanged(int deviceId, string name, object data)
+        {
+            if (deviceId != activeDeviceId && activeDeviceId >= 0) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (data is int pct)
+                    BatteryText.Text = $"{pct}%";
+                else
+                    BatteryText.Text = data?.ToString() ?? "--%";
+            });
+        }
+
+        private static string FormatFrequency(int freq)
+        {
+            if (freq <= 0) return "--- .--- MHz";
+            double mhz = freq / 1000000.0;
+            return $"{mhz:F5} MHz";
+        }
+
+        private void UpdateVfoDisplay()
+        {
+            if (currentSettings == null || currentChannels == null) return;
+
+            int chA = currentSettings.channel_a;
+            int chB = currentSettings.channel_b;
+
+            RadioChannelInfo infoA = (chA >= 0 && chA < currentChannels.Length) ? currentChannels[chA] : null;
+            RadioChannelInfo infoB = (chB >= 0 && chB < currentChannels.Length) ? currentChannels[chB] : null;
+
+            VfoAName.Text = infoA != null && !string.IsNullOrEmpty(infoA.name_str) ? infoA.name_str : $"CH {chA + 1}";
+            VfoAFreq.Text = infoA != null ? FormatFrequency(infoA.rx_freq) : "--- .--- MHz";
+
+            VfoBName.Text = infoB != null && !string.IsNullOrEmpty(infoB.name_str) ? infoB.name_str : $"CH {chB + 1}";
+            VfoBFreq.Text = infoB != null ? FormatFrequency(infoB.rx_freq) : "--- .--- MHz";
+        }
+
+        private void UpdateChannelList()
+        {
+            if (currentChannels == null) return;
+
+            int activeA = currentSettings?.channel_a ?? -1;
+            int activeB = currentSettings?.channel_b ?? -1;
+
+            var items = new List<ChannelDisplayItem>();
+            for (int i = 0; i < currentChannels.Length; i++)
+            {
+                var ch = currentChannels[i];
+                if (ch == null) continue;
+                if (string.IsNullOrEmpty(ch.name_str) && ch.rx_freq == 0) continue;
+
+                bool isA = (i == activeA);
+                bool isB = (i == activeB);
+
+                IBrush bg;
+                IBrush nameColor;
+                if (isA) { bg = new SolidColorBrush(Color.Parse("#1B3A4B")); nameColor = new SolidColorBrush(Color.Parse("#64B5F6")); }
+                else if (isB) { bg = new SolidColorBrush(Color.Parse("#2A1B3A")); nameColor = new SolidColorBrush(Color.Parse("#CE93D8")); }
+                else { bg = Brushes.Transparent; nameColor = new SolidColorBrush(Color.Parse("#E0E0E0")); }
+
+                items.Add(new ChannelDisplayItem
+                {
+                    Id = (i + 1).ToString(),
+                    Name = !string.IsNullOrEmpty(ch.name_str) ? ch.name_str : $"CH {i + 1}",
+                    Frequency = FormatFrequency(ch.rx_freq),
+                    Background = bg,
+                    NameColor = nameColor
+                });
+            }
+
+            ChannelList.ItemsSource = items;
+        }
+
+        private void UpdateChannelHighlights()
+        {
+            // Re-render channel list with updated active channel from HtStatus
+            UpdateChannelList();
         }
 
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)

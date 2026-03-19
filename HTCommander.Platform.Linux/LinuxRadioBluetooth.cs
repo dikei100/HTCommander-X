@@ -5,45 +5,32 @@ http://www.apache.org/licenses/LICENSE-2.0
 */
 
 using System;
-using System.Diagnostics;
-using System.IO;
+using System.Collections.Generic;
 using System.Linq;
-using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using Tmds.DBus;
 
 namespace HTCommander.Platform.Linux
 {
     /// <summary>
-    /// Linux Bluetooth transport using BlueZ D-Bus + native RFCOMM sockets.
-    /// Strategy: Register an SPP profile with BlueZ ProfileManager1, then connect.
-    /// BlueZ calls our profile with a ready-to-use file descriptor on the correct channel.
+    /// Linux Bluetooth transport using direct native RFCOMM sockets.
+    /// Strategy: Use SDP to discover the SPP command channel, then connect with a native
+    /// RFCOMM socket and verify GAIA protocol response. This approach (used by benlink/khusmann)
+    /// is more reliable than BlueZ ProfileManager1 which has fd lifecycle issues with Tmds.DBus.
     /// </summary>
     public class LinuxRadioBluetooth : IRadioBluetooth
     {
         private IRadioHost parent;
         private bool running = false;
         private int rfcommFd = -1;
-        private Stream inputStream = null;
-        private Stream outputStream = null;
         private CancellationTokenSource connectionCts = null;
         private readonly object connectionLock = new object();
         private Task connectionTask = null;
         private bool isConnecting = false;
         private bool _disposed = false;
-
-        // Serial Port Profile UUID
-        private const string SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
-        // Unique profile path for this instance
-        private static int _profileCounter = 0;
-        private string _profilePath;
-
-        // Signaling: BlueZ delivers the fd via NewConnection callback
-        private TaskCompletionSource<int> _fdReady;
 
         public event Action OnConnected;
         public event Action<Exception, byte[]> ReceivedData;
@@ -56,7 +43,6 @@ namespace HTCommander.Platform.Linux
         public LinuxRadioBluetooth(IRadioHost parent)
         {
             this.parent = parent;
-            _profilePath = $"/htcommander/spp_profile_{Interlocked.Increment(ref _profileCounter)}";
         }
 
         private void Debug(string msg) { parent?.Debug("Transport: " + msg); }
@@ -167,13 +153,6 @@ namespace HTCommander.Platform.Linux
 
             lock (connectionLock)
             {
-                try { inputStream?.Close(); } catch { }
-                try { inputStream?.Dispose(); } catch { }
-                inputStream = null;
-                try { outputStream?.Close(); } catch { }
-                try { outputStream?.Dispose(); } catch { }
-                outputStream = null;
-
                 if (rfcommFd >= 0) { try { NativeMethods.close(rfcommFd); } catch { } rfcommFd = -1; }
 
                 try { connectionCts?.Dispose(); } catch { }
@@ -238,114 +217,44 @@ namespace HTCommander.Platform.Linux
             string macColon = string.Join(":", Enumerable.Range(0, 6).Select(i => mac.Substring(i * 2, 2)));
             string formattedMac = string.Join("_", Enumerable.Range(0, 6).Select(i => mac.Substring(i * 2, 2)));
             string devicePath = $"{AdapterPath}/dev_{formattedMac}";
+            byte[] bdaddr = ParseMacAddress(mac);
 
             int retry = 3;
             while (retry > 0 && !ct.IsCancellationRequested)
             {
-                Connection dbusConn = null;
                 try
                 {
                     Debug($"Connecting to {macColon} (attempt {4 - retry}/3)...");
 
-                    // Open a persistent D-Bus connection for the profile registration
-                    dbusConn = new Connection(Address.System);
-                    await dbusConn.ConnectAsync();
+                    // Step 1: Ensure ACL-level connection via BlueZ D-Bus
+                    await EnsureAclConnection(devicePath, ct);
 
-                    // Step 1: Ensure ACL-level connection
-                    var device = dbusConn.CreateProxy<IDevice1>(BlueZBusName, devicePath);
-                    try
+                    // Step 2: Try SDP-based channel discovery, then direct RFCOMM socket
+                    // This approach (used by benlink/khusmann) is more reliable than ProfileManager1
+                    int[] sppChannels = await DiscoverSppChannels(macColon);
+
+                    if (sppChannels != null && sppChannels.Length > 0)
                     {
-                        var connected = await device.GetAsync("Connected");
-                        if (!(connected is bool b && b))
-                        {
-                            Debug("Connecting at ACL level...");
-                            await device.ConnectAsync();
-                            await Task.Delay(2000, ct);
-                        }
-                        else
-                        {
-                            Debug("Device already connected at ACL level");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug($"ACL connect: {ex.Message}");
+                        Debug($"SDP discovered {sppChannels.Length} SPP channel(s): {string.Join(", ", sppChannels)}");
+                        rfcommFd = ConnectToGaiaChannel(bdaddr, sppChannels);
                     }
 
-                    // Step 2: Register SPP profile and connect
-                    Debug("Registering SPP profile with BlueZ...");
-                    _fdReady = new TaskCompletionSource<int>();
-
-                    // Register our profile handler object on D-Bus
-                    var profileHandler = new SppProfileHandler(this);
-                    await dbusConn.RegisterObjectAsync(profileHandler);
-
-                    // Register the profile with BlueZ ProfileManager1
-                    var profileManager = dbusConn.CreateProxy<IProfileManager1>(BlueZBusName, "/org/bluez");
-                    var options = new Dictionary<string, object>
+                    // Step 3: If SDP failed or no channel responded, probe channels 1-10
+                    if (rfcommFd < 0)
                     {
-                        { "Role", "client" },
-                        { "Channel", (ushort)0 },  // 0 = auto (BlueZ picks via SDP)
-                        { "RequireAuthentication", false },
-                        { "RequireAuthorization", false }
-                    };
-
-                    try
-                    {
-                        await profileManager.RegisterProfileAsync(new ObjectPath(_profilePath), SPP_UUID, options);
-                        Debug("SPP profile registered");
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug($"Profile registration: {ex.Message}");
-                        // May already be registered, try connecting anyway
-                    }
-
-                    // Step 3: Ask BlueZ to connect using our profile
-                    Debug("Requesting ConnectProfile...");
-                    try
-                    {
-                        await device.ConnectProfileAsync(SPP_UUID);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug($"ConnectProfile: {ex.Message}");
-                    }
-
-                    // Step 4: Wait for BlueZ to deliver the fd via NewConnection
-                    Debug("Waiting for BlueZ to deliver file descriptor...");
-                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    cts.CancelAfter(TimeSpan.FromSeconds(10));
-                    cts.Token.Register(() => _fdReady.TrySetCanceled());
-
-                    try
-                    {
-                        rfcommFd = await _fdReady.Task;
-                        Debug($"Got fd {rfcommFd} from BlueZ NewConnection");
-                        retry = -2;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        Debug("Timeout waiting for NewConnection — BlueZ did not deliver fd");
-
-                        // Fallback: try native RFCOMM socket with channel probing
-                        Debug("Falling back to direct RFCOMM channel probing...");
-                        byte[] bdaddr = ParseMacAddress(mac);
+                        Debug("Probing RFCOMM channels for GAIA response...");
                         rfcommFd = ProbeChannels(bdaddr);
-                        if (rfcommFd >= 0)
-                        {
-                            retry = -2;
-                        }
-                        else
-                        {
-                            retry--;
-                            if (retry > 0) await Task.Delay(2000, ct);
-                        }
                     }
-                    finally
+
+                    if (rfcommFd >= 0)
                     {
-                        // Unregister profile (best effort)
-                        try { await profileManager.UnregisterProfileAsync(new ObjectPath(_profilePath)); } catch { }
+                        retry = -2; // success
+                    }
+                    else
+                    {
+                        retry--;
+                        Debug("No GAIA-responsive RFCOMM channel found");
+                        if (retry > 0) await Task.Delay(2000, ct);
                     }
                 }
                 catch (OperationCanceledException) { break; }
@@ -356,10 +265,6 @@ namespace HTCommander.Platform.Linux
                     if (rfcommFd >= 0) { try { NativeMethods.close(rfcommFd); } catch { } rfcommFd = -1; }
                     if (retry > 0) await Task.Delay(2000, ct);
                 }
-                finally
-                {
-                    dbusConn?.Dispose();
-                }
             }
 
             if (retry != -2)
@@ -369,69 +274,253 @@ namespace HTCommander.Platform.Linux
                 return;
             }
 
-            Debug("Connected.");
+            Debug("Connected — GAIA communication verified.");
             RunReadLoop(ct);
         }
 
         /// <summary>
-        /// Called by BlueZ via our registered Profile1 when the RFCOMM connection is established.
+        /// Ensure ACL-level Bluetooth connection via BlueZ D-Bus.
         /// </summary>
-        internal void OnNewConnection(ObjectPath device, int fd, IDictionary<string, object> properties)
+        private async Task EnsureAclConnection(string devicePath, CancellationToken ct)
         {
-            Debug($"BlueZ NewConnection: device={device}, fd={fd}");
-            _fdReady?.TrySetResult(fd);
+            try
+            {
+                using var dbusConn = new Connection(Address.System);
+                await dbusConn.ConnectAsync();
+                var device = dbusConn.CreateProxy<IDevice1>(BlueZBusName, devicePath);
+
+                var connected = await device.GetAsync("Connected");
+                if (connected is bool b && b)
+                {
+                    Debug("Device already connected at ACL level");
+                    return;
+                }
+
+                Debug("Connecting at ACL level...");
+                await device.ConnectAsync();
+                await Task.Delay(2000, ct);
+            }
+            catch (Exception ex)
+            {
+                Debug($"ACL connect: {ex.Message} (will try direct RFCOMM anyway)");
+            }
+        }
+
+        /// <summary>
+        /// Discover SPP RFCOMM channels via sdptool or bluetoothctl.
+        /// Returns channel numbers for "SPP Dev" / Serial Port services, or null if discovery fails.
+        /// </summary>
+        private async Task<int[]> DiscoverSppChannels(string macColon)
+        {
+            // Try sdptool first (most reliable for RFCOMM channel discovery)
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo("sdptool", $"browse {macColon}")
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var proc = System.Diagnostics.Process.Start(psi);
+                if (proc != null)
+                {
+                    string output = await proc.StandardOutput.ReadToEndAsync();
+                    proc.WaitForExit(10000);
+
+                    if (proc.ExitCode == 0 && !string.IsNullOrEmpty(output))
+                    {
+                        var channels = ParseSdptoolOutput(output);
+                        if (channels.Count > 0)
+                        {
+                            Debug($"sdptool found SPP channels: {string.Join(", ", channels)}");
+                            return channels.ToArray();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug($"sdptool not available: {ex.Message}");
+            }
+
+            // Fallback: try bluetoothctl info to at least confirm SPP UUID is advertised
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo("bluetoothctl", $"info {macColon}")
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var proc = System.Diagnostics.Process.Start(psi);
+                if (proc != null)
+                {
+                    string output = await proc.StandardOutput.ReadToEndAsync();
+                    proc.WaitForExit(5000);
+
+                    if (output.Contains("00001101-0000-1000-8000-00805f9b34fb"))
+                    {
+                        Debug("bluetoothctl confirms SPP UUID is advertised");
+                        // Can't get channel number from bluetoothctl, will probe
+                    }
+                    else
+                    {
+                        Debug("bluetoothctl: SPP UUID not found in device services");
+                    }
+                }
+            }
+            catch (Exception) { }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Parse sdptool browse output to find RFCOMM channel numbers for SPP/"SPP Dev" services.
+        /// </summary>
+        private List<int> ParseSdptoolOutput(string output)
+        {
+            var sppChannels = new List<int>();
+            var allChannels = new List<int>();
+            string[] records = output.Split(new[] { "Service Name:" }, StringSplitOptions.None);
+
+            foreach (string record in records)
+            {
+                // Look for RFCOMM channel number
+                var channelMatch = Regex.Match(record, @"Channel:\s*(\d+)");
+                if (!channelMatch.Success) continue;
+                int channel = int.Parse(channelMatch.Groups[1].Value);
+
+                // Check if this is an SPP service (command channel)
+                bool isSpp = record.Contains("SPP Dev") ||
+                             record.Contains("Serial Port") ||
+                             record.Contains("00001101-0000-1000-8000-00805f9b34fb");
+
+                if (isSpp)
+                {
+                    Debug($"SDP: SPP service on channel {channel}");
+                    sppChannels.Add(channel);
+                }
+                else
+                {
+                    // Track other channels too (audio "BS AOC", HFP, etc.)
+                    string nameMatch = record.TrimStart();
+                    string name = nameMatch.Length > 40 ? nameMatch.Substring(0, 40) : nameMatch;
+                    Debug($"SDP: other service on channel {channel}: {name.Trim()}");
+                    allChannels.Add(channel);
+                }
+            }
+
+            // If we found specific SPP channels, return those first
+            // Otherwise return all discovered channels for probing
+            if (sppChannels.Count > 0) return sppChannels;
+            return allChannels;
+        }
+
+        /// <summary>
+        /// Try connecting to specific RFCOMM channels and verify GAIA response.
+        /// Only accepts a channel if the radio actually responds to GET_DEV_ID.
+        /// </summary>
+        private int ConnectToGaiaChannel(byte[] bdaddr, int[] channels)
+        {
+            foreach (int ch in channels)
+            {
+                int fd = CreateRfcommFd(bdaddr, ch);
+                if (fd < 0)
+                {
+                    Debug($"Channel {ch}: connect failed");
+                    continue;
+                }
+
+                if (VerifyGaiaResponse(fd, ch))
+                    return fd;
+
+                NativeMethods.close(fd);
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Send GAIA GET_DEV_ID command and verify the radio responds with valid GAIA data.
+        /// This is the critical test — benlink and HTCommander Windows both work because
+        /// they connect to the correct SPP channel that actually carries GAIA traffic.
+        /// </summary>
+        private bool VerifyGaiaResponse(int fd, int channel)
+        {
+            // Send GET_DEV_ID: group=BASIC(2), cmd=1
+            byte[] gaiaCmd = GaiaEncode(new byte[] { 0x00, 0x02, 0x00, 0x01 });
+            int sent = NativeMethods.write(fd, gaiaCmd, gaiaCmd.Length);
+            if (sent < 0)
+            {
+                Debug($"Channel {channel}: write failed (errno={Marshal.GetLastWin32Error()})");
+                return false;
+            }
+            Debug($"Channel {channel}: sent GET_DEV_ID ({sent} bytes)");
+
+            // Wait for GAIA response — the radio should respond within 2 seconds
+            var pfd = new NativeMethods.pollfd { fd = fd, events = 1 /* POLLIN */ };
+            int pollResult = NativeMethods.poll(ref pfd, 1, 3000);
+
+            if (pollResult <= 0)
+            {
+                Debug($"Channel {channel}: no response (poll={pollResult})");
+                return false;
+            }
+
+            if ((pfd.revents & (4 | 8 | 16)) != 0) // POLLERR | POLLHUP | POLLNVAL
+            {
+                Debug($"Channel {channel}: socket error (revents=0x{pfd.revents:X})");
+                return false;
+            }
+
+            if ((pfd.revents & 1) != 0) // POLLIN
+            {
+                byte[] buf = new byte[1024];
+                int bytesRead = NativeMethods.read(fd, buf, buf.Length);
+                if (bytesRead > 0)
+                {
+                    string hex = BitConverter.ToString(buf, 0, Math.Min(bytesRead, 32));
+                    Debug($"Channel {channel}: received {bytesRead} bytes: {hex}");
+
+                    // Verify it looks like a GAIA response (starts with FF 01)
+                    if (bytesRead >= 2 && buf[0] == 0xFF && buf[1] == 0x01)
+                    {
+                        Debug($"Channel {channel}: valid GAIA response — this is the command channel!");
+                        return true;
+                    }
+                    else
+                    {
+                        Debug($"Channel {channel}: not a GAIA response");
+                        return false;
+                    }
+                }
+            }
+
+            Debug($"Channel {channel}: no data received");
+            return false;
         }
 
         /// <summary>
         /// Fallback: probe RFCOMM channels 1-30 with native sockets.
-        /// Sends a GAIA command and checks if the connection stays alive.
+        /// Only accepts a channel if it responds with valid GAIA data (FF 01 header).
+        /// Based on approach used by benlink (khusmann) — direct RFCOMM socket per channel.
         /// </summary>
         private int ProbeChannels(byte[] bdaddr)
         {
-            Debug("Probing RFCOMM channels 1-30...");
+            Debug("Probing RFCOMM channels 1-30 for GAIA response...");
             for (int ch = 1; ch <= 30; ch++)
             {
                 int fd = CreateRfcommFd(bdaddr, ch);
                 if (fd < 0) continue;
 
-                // Send GAIA GET_DEV_ID and check for response
-                byte[] gaiaCmd = GaiaEncode(new byte[] { 0x00, 0x02, 0x00, 0x01 });
-                int sent = NativeMethods.write(fd, gaiaCmd, gaiaCmd.Length);
-                if (sent < 0) { NativeMethods.close(fd); continue; }
+                Debug($"Channel {ch}: connected, testing GAIA...");
+                if (VerifyGaiaResponse(fd, ch))
+                    return fd;
 
-                // Wait briefly for data or timeout
-                byte[] buf = new byte[64];
-                // Set non-blocking with timeout via poll
-                var pfd = new NativeMethods.pollfd { fd = fd, events = 1 /* POLLIN */ };
-                int pollResult = NativeMethods.poll(ref pfd, 1, 1500);
-
-                if (pollResult > 0 && (pfd.revents & 1) != 0)
-                {
-                    int read = NativeMethods.read(fd, buf, buf.Length);
-                    if (read > 0)
-                    {
-                        Debug($"Channel {ch}: got {read} bytes — using this channel");
-                        return fd;
-                    }
-                }
-                else if (pollResult == 0)
-                {
-                    // Timeout — socket still alive, this might be the right channel
-                    // Check if socket is still connected
-                    int err = 0;
-                    int errLen = 4;
-                    NativeMethods.getsockopt(fd, 1 /* SOL_SOCKET */, 4 /* SO_ERROR */, ref err, ref errLen);
-                    if (err == 0)
-                    {
-                        Debug($"Channel {ch}: timeout but socket alive — using this channel");
-                        return fd;
-                    }
-                }
-
-                Debug($"Channel {ch}: not responsive");
                 NativeMethods.close(fd);
             }
-            Debug("No responsive channel found");
+            Debug("No GAIA-responsive channel found");
             return -1;
         }
 
@@ -473,52 +562,25 @@ namespace HTCommander.Platform.Linux
                 NativeMethods.getsockopt(rfcommFd, 1 /* SOL_SOCKET */, 38 /* SO_PROTOCOL */, ref sockProto, ref sockProtoLen);
                 Debug($"Socket info: type={sockType} (1=STREAM), domain={sockDomain} (31=AF_BLUETOOTH), protocol={sockProto} (3=BTPROTO_RFCOMM)");
 
-                // Check if socket is non-blocking
                 int flags = NativeMethods.fcntl(rfcommFd, 3 /* F_GETFL */);
-                bool nonBlocking = (flags & 0x800 /* O_NONBLOCK */) != 0;
-                Debug($"Socket flags=0x{flags:X}, nonBlocking={nonBlocking}");
-                if (nonBlocking)
-                {
-                    // Clear non-blocking — we want blocking reads with poll() timeout
-                    NativeMethods.fcntl3(rfcommFd, 4 /* F_SETFL */, flags & ~0x800);
-                    Debug("Cleared O_NONBLOCK flag");
-                }
+                Debug($"Socket flags=0x{flags:X}");
 
                 running = true;
-                OnConnected?.Invoke();
 
-                int pollTimeouts = 0;
-                // Use direct read()/write() on the fd — avoids Socket/NetworkStream issues with BT fds
+                // Set socket to non-blocking mode.
+                // Neither poll() nor SO_RCVTIMEO work reliably on RFCOMM sockets,
+                // so we use non-blocking read() with a manual sleep loop.
+                int curFlags = NativeMethods.fcntl(rfcommFd, 3 /* F_GETFL */);
+                NativeMethods.fcntl3(rfcommFd, 4 /* F_SETFL */, curFlags | 0x800 /* O_NONBLOCK */);
+                Debug("Read loop starting (non-blocking read with sleep loop)");
+
+                // Fire OnConnected on a background thread so the read loop starts immediately.
+                ThreadPool.QueueUserWorkItem(_ => OnConnected?.Invoke());
+
+                int idleCycles = 0;
                 while (running && !ct.IsCancellationRequested)
                 {
-                    // Use poll() to wait for data with a timeout so we can check cancellation
-                    var pfd = new NativeMethods.pollfd { fd = rfcommFd, events = 1 /* POLLIN */ };
-                    int pollResult = NativeMethods.poll(ref pfd, 1, 1000); // 1 second timeout
-
-                    if (pollResult < 0)
-                    {
-                        int errno = Marshal.GetLastWin32Error();
-                        if (errno == 4) continue; // EINTR — interrupted, just retry
-                        Debug($"poll() error: errno={errno}");
-                        break;
-                    }
-
-                    if (pollResult == 0)
-                    {
-                        // Every 10 timeouts, log that we're still waiting
-                        if (++pollTimeouts % 10 == 0) Debug($"poll() waiting... ({pollTimeouts}s, no data from radio)");
-                        continue;
-                    }
-
-                    if ((pfd.revents & (4 | 8 | 16)) != 0) // POLLERR | POLLHUP | POLLNVAL
-                    {
-                        Debug($"poll() revents={pfd.revents} — connection lost");
-                        break;
-                    }
-
-                    if ((pfd.revents & 1) == 0) continue; // no POLLIN
-
-                    // Read into a temp buffer, then copy to accumulator at the right offset
+                    // Read into a temp buffer, then copy to accumulator
                     int space = accumulator.Length - (accumulatorPtr + accumulatorLen);
                     if (space <= 0) { accumulatorPtr = 0; accumulatorLen = 0; space = accumulator.Length; }
 
@@ -528,7 +590,14 @@ namespace HTCommander.Platform.Linux
                     if (bytesRead < 0)
                     {
                         int errno = Marshal.GetLastWin32Error();
-                        if (errno == 11 || errno == 4) continue; // EAGAIN or EINTR
+                        // EAGAIN/EWOULDBLOCK (11) = no data available, EINTR (4) = signal
+                        if (errno == 11 || errno == 4)
+                        {
+                            idleCycles++;
+                            if (idleCycles % 600 == 0) Debug($"Waiting for data... ({idleCycles / 20}s)");
+                            Thread.Sleep(50); // 50ms between read attempts
+                            continue;
+                        }
                         Debug($"read() error: errno={errno}");
                         break;
                     }
@@ -539,6 +608,8 @@ namespace HTCommander.Platform.Linux
                         Debug("read() returned 0 — remote closed connection");
                         break;
                     }
+
+                    idleCycles = 0;
 
                     Array.Copy(readBuf, 0, accumulator, accumulatorPtr + accumulatorLen, bytesRead);
                     accumulatorLen += bytesRead;
@@ -636,6 +707,13 @@ namespace HTCommander.Platform.Linux
             [DllImport("libc", SetLastError = true)]
             public static extern int getsockopt(int sockfd, int level, int optname, ref int optval, ref int optlen);
 
+            [DllImport("libc", SetLastError = true)]
+            public static extern int setsockopt(int sockfd, int level, int optname, byte[] optval, int optlen);
+
+            // Alias for clarity
+            public static int setsockopt_bytes(int sockfd, int level, int optname, byte[] optval, int optlen)
+                => setsockopt(sockfd, level, optname, optval, optlen);
+
             [StructLayout(LayoutKind.Sequential)]
             public struct pollfd { public int fd; public short events; public short revents; }
 
@@ -647,47 +725,6 @@ namespace HTCommander.Platform.Linux
 
             [DllImport("libc", SetLastError = true, EntryPoint = "fcntl")]
             public static extern int fcntl3(int fd, int cmd, int arg);
-        }
-    }
-
-    /// <summary>
-    /// BlueZ Profile1 D-Bus handler. Receives NewConnection callback with the fd.
-    /// </summary>
-    internal class SppProfileHandler : IProfile1
-    {
-        private readonly LinuxRadioBluetooth _owner;
-        public ObjectPath ObjectPath { get; }
-
-        public SppProfileHandler(LinuxRadioBluetooth owner)
-        {
-            _owner = owner;
-            // Use reflection to get the profile path
-            var field = typeof(LinuxRadioBluetooth).GetField("_profilePath",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            ObjectPath = new ObjectPath((string)field.GetValue(owner));
-        }
-
-        [DllImport("libc", SetLastError = true)]
-        private static extern int dup(int oldfd);
-
-        public Task NewConnectionAsync(ObjectPath device, CloseSafeHandle fd, IDictionary<string, object> properties)
-        {
-            // CRITICAL: dup() the fd before this method returns, because Tmds.DBus
-            // will close the CloseSafeHandle (and thus the original fd) when we return.
-            int originalFd = fd.DangerousGetHandle().ToInt32();
-            int dupedFd = dup(originalFd);
-            _owner.OnNewConnection(device, dupedFd, properties);
-            return Task.CompletedTask;
-        }
-
-        public Task RequestDisconnectionAsync(ObjectPath device)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task ReleaseAsync()
-        {
-            return Task.CompletedTask;
         }
     }
 
@@ -712,21 +749,6 @@ namespace HTCommander.Platform.Linux
         Task ConnectProfileAsync(string uuid);
         Task DisconnectAsync();
         Task<object> GetAsync(string prop);
-    }
-
-    [DBusInterface("org.bluez.ProfileManager1")]
-    public interface IProfileManager1 : IDBusObject
-    {
-        Task RegisterProfileAsync(ObjectPath profile, string uuid, IDictionary<string, object> options);
-        Task UnregisterProfileAsync(ObjectPath profile);
-    }
-
-    [DBusInterface("org.bluez.Profile1")]
-    public interface IProfile1 : IDBusObject
-    {
-        Task NewConnectionAsync(ObjectPath device, CloseSafeHandle fd, IDictionary<string, object> properties);
-        Task RequestDisconnectionAsync(ObjectPath device);
-        Task ReleaseAsync();
     }
 
     #endregion
