@@ -356,7 +356,7 @@ namespace HTCommander.Controls
         /// </summary>
         private async void queryDeviceNamesToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            string[] deviceNames = await RadioBluetoothWin.GetDeviceNames();
+            string[] deviceNames = await RadioBluetoothWin.GetDeviceNamesStatic();
             broker.LogInfo("List of devices:");
             foreach (string deviceName in deviceNames)
             {

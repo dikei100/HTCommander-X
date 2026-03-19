@@ -13,7 +13,7 @@ using HTCommander.radio;
 
 namespace HTCommander
 {
-    public class Radio : IDisposable
+    public class Radio : IRadioHost, IDisposable
     {
         #region Constants and Fields
 
@@ -24,7 +24,7 @@ namespace HTCommander
         public string MacAddress { get; }
         public string FriendlyName { get; private set; }
 
-        private RadioBluetoothWin radioTransport;
+        private IRadioBluetooth radioTransport;
         private TncDataFragment frameAccumulator = null;
         private RadioState state = RadioState.Disconnected;
         private bool _gpsEnabled = false;
@@ -55,12 +55,7 @@ namespace HTCommander
 
         #region Enums
 
-        public class CompatibleDevice
-        {
-            public string name;
-            public string mac;
-            public CompatibleDevice(string name, string mac) { this.name = name; this.mac = mac; }
-        }
+        // CompatibleDevice is now in HTCommander.Core
 
         public enum RadioAprsMessageTypes : byte
         {
@@ -125,11 +120,7 @@ namespace HTCommander
             Volume = 9, AllChannelsLoaded = 10, RegionChange = 11, BssSettings = 12
         }
 
-        public enum RadioState : int
-        {
-            Disconnected = 1, Connecting = 2, Connected = 3, MultiRadioSelect = 4,
-            UnableToConnect = 5, BluetoothNotAvailable = 6, NotRadioFound = 7, AccessDenied = 8
-        }
+        // RadioState enum is now in HTCommander.Core
 
         public enum RadioCommandState : int
         {
@@ -160,10 +151,13 @@ namespace HTCommander
 
         #region Constructor and Disposal
 
-        public Radio(int deviceid, string mac)
+        private IPlatformServices _platformServices;
+
+        public Radio(int deviceid, string mac, IPlatformServices platformServices = null)
         {
             DeviceId = deviceid;
             MacAddress = mac;
+            _platformServices = platformServices;
             broker = new DataBrokerClient();
 
             RadioAudio = new RadioAudio(this, deviceid, mac);
@@ -571,7 +565,15 @@ namespace HTCommander
             UpdateState(RadioState.Connecting);
             Debug("Attempting to connect to radio MAC: " + MacAddress);
 
-            radioTransport = new RadioBluetoothWin(this);
+            if (_platformServices != null)
+            {
+                radioTransport = _platformServices.CreateRadioBluetooth(this);
+            }
+            else
+            {
+                // Fallback for backward compatibility during migration
+                radioTransport = new RadioBluetoothWin(this);
+            }
             radioTransport.ReceivedData += RadioTransport_ReceivedData;
             radioTransport.OnConnected += RadioTransport_OnConnected;
             radioTransport.Connect();
@@ -1131,7 +1133,7 @@ namespace HTCommander
 
         #region Response Handling
 
-        private void RadioTransport_ReceivedData(RadioBluetoothWin sender, Exception error, byte[] value)
+        private void RadioTransport_ReceivedData(Exception error, byte[] value)
         {
             if (state != RadioState.Connected && state != RadioState.Connecting) return;
             if (error != null) { Debug("Notification ERROR SET"); }

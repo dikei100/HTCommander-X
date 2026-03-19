@@ -553,7 +553,7 @@ namespace HTCommander
                     break;
                 case 'D': // Data frame from app
                     {
-                        if ((parent.radio.State == Radio.RadioState.Connected) && (parent.activeStationLock != null) && (parent.activeStationLock.StationType == StationInfoClass.StationTypes.AGWPE) && (parent.session.CurrentState == AX25Session.ConnectionState.CONNECTED))
+                        if ((parent.radio.State == RadioState.Connected) && (parent.activeStationLock != null) && (parent.activeStationLock.StationType == StationInfoClass.StationTypes.AGWPE) && (parent.session.CurrentState == AX25Session.ConnectionState.CONNECTED))
                         {
                             OnDebugMessage($"AGWPE data frame from {frame.CallFrom} to {frame.CallTo}, {frame.DataLen} bytes.");
                             parent.session.Send(frame.Data);
@@ -563,7 +563,7 @@ namespace HTCommander
                 case 'M': // Send UNPROTO Information (from client to radio)
                     {
                         OnDebugMessage($"AGWPE M frame (Send UNPROTO) from {frame.CallFrom} to {frame.CallTo}, {frame.DataLen} bytes");
-                        if (parent.radio.State != Radio.RadioState.Connected) return;
+                        if (parent.radio.State != RadioState.Connected) return;
                         // Construct AX25Packet for UNPROTO (UI) frame
                         var addresses = new System.Collections.Generic.List<AX25Address>
                         {
@@ -595,7 +595,7 @@ namespace HTCommander
                     {
                         OnDebugMessage($"AGWPE session connect request.");
 
-                        if ((parent.radio.State != Radio.RadioState.Connected) || (parent.activeStationLock != null))
+                        if ((parent.radio.State != RadioState.Connected) || (parent.activeStationLock != null))
                         {
                             OnDebugMessage($"AGWPE cannot connect, radio is not connected or busy.");
                             // Disconnect

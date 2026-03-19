@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HTCommander.Desktop.Dialogs.AboutDialog"
+        Title="About HTCommander"
+        Width="450" Height="300"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="20" Spacing="12">
+        <TextBlock Text="HTCommander" FontSize="24" FontWeight="Bold" />
+        <TextBlock Name="VersionText" Text="Version: ..." />
+        <TextBlock TextWrapping="Wrap"
+                   Text="Open source ham radio commander for Bluetooth-enabled handhelds. Supports UV-PRO, VR-N75, VR-N76, VR-N7500, and other compatible radios." />
+        <TextBlock TextWrapping="Wrap"
+                   Text="Copyright 2026 Ylian Saint-Hilaire. Licensed under Apache License 2.0." />
+        <StackPanel Spacing="4">
+            <Button Name="GithubLink" Content="GitHub Repository" Click="GithubLink_Click"
+                    Classes="hyperlink" Padding="0" Background="Transparent" Foreground="Blue" />
+            <Button Name="LicenseLink" Content="Apache License 2.0" Click="LicenseLink_Click"
+                    Classes="hyperlink" Padding="0" Background="Transparent" Foreground="Blue" />
+        </StackPanel>
+        <Button Content="Close" Click="CloseButton_Click" HorizontalAlignment="Right"
+                Padding="16,4" />
+    </StackPanel>
+</Window>

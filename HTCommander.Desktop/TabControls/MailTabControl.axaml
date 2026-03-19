@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HTCommander.Desktop.TabControls.MailTabControl">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="Silver" Height="46" Padding="10,0">
+            <Grid>
+                <TextBlock Text="Mail" VerticalAlignment="Center"
+                           FontSize="14" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Spacing="4">
+                    <Button Name="ComposeButton" Content="Compose"
+                            Click="ComposeButton_Click" Padding="8,2" />
+                    <Button Name="ConnectButton" Content="Connect"
+                            Click="ConnectButton_Click" Padding="8,2" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Mailbox tree -->
+            <TreeView Name="MailboxTree" Grid.Column="0"
+                      SelectionChanged="MailboxTree_SelectionChanged">
+                <TreeViewItem Header="Inbox" Tag="inbox" IsExpanded="True" />
+                <TreeViewItem Header="Outbox" Tag="outbox" />
+                <TreeViewItem Header="Draft" Tag="draft" />
+                <TreeViewItem Header="Sent" Tag="sent" />
+                <TreeViewItem Header="Archive" Tag="archive" />
+                <TreeViewItem Header="Trash" Tag="trash" />
+            </TreeView>
+
+            <GridSplitter Grid.Column="1" Width="5" />
+
+            <!-- Mail content -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="5" />
+                    <RowDefinition Height="200" />
+                </Grid.RowDefinitions>
+
+                <DataGrid Name="MailList" Grid.Row="0" AutoGenerateColumns="False"
+                          IsReadOnly="True" SelectionChanged="MailList_SelectionChanged">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="From" Width="120" />
+                        <DataGridTextColumn Header="Subject" Width="*" />
+                        <DataGridTextColumn Header="Date" Width="140" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" />
+
+                <TextBox Name="MailPreview" Grid.Row="2" IsReadOnly="True"
+                         AcceptsReturn="True" TextWrapping="Wrap" />
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

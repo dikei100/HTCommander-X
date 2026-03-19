@@ -1,0 +1,64 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HTCommander.Desktop.Dialogs.RadioChannelDialog"
+        Title="Channel Editor"
+        Width="450" Height="400"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+            <Button Name="AdvancedButton" Content="Advanced" Click="AdvancedButton_Click"
+                    Padding="12,6" />
+            <Button Name="OkButton" Content="OK" Click="OkButton_Click" Padding="16,6" />
+            <Button Content="Cancel" Click="CancelButton_Click" Padding="16,6" />
+        </StackPanel>
+
+        <ScrollViewer>
+            <StackPanel Spacing="8">
+                <!-- Basic fields -->
+                <TextBlock Text="Basic Settings" FontWeight="SemiBold" FontSize="14" />
+
+                <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Frequency (MHz):" VerticalAlignment="Center" />
+                    <TextBox Name="FrequencyBox" Grid.Row="0" Grid.Column="1" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Name:" VerticalAlignment="Center" />
+                    <TextBox Name="ChannelNameBox" Grid.Row="1" Grid.Column="1" MaxLength="8" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Mode:" VerticalAlignment="Center" />
+                    <ComboBox Name="ModeCombo" Grid.Row="2" Grid.Column="1">
+                        <ComboBoxItem Content="FM" />
+                        <ComboBoxItem Content="NFM" />
+                        <ComboBoxItem Content="AM" />
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Bandwidth:" VerticalAlignment="Center" />
+                    <ComboBox Name="BandwidthCombo" Grid.Row="3" Grid.Column="1">
+                        <ComboBoxItem Content="Wide (25kHz)" />
+                        <ComboBoxItem Content="Narrow (12.5kHz)" />
+                    </ComboBox>
+
+                    <CheckBox Name="MuteCheck" Grid.Row="4" Grid.Column="1" Content="Mute" />
+                    <CheckBox Name="DisableTransmitCheck" Grid.Row="5" Grid.Column="1" Content="Disable Transmit" />
+                </Grid>
+
+                <!-- Advanced fields (hidden by default) -->
+                <StackPanel Name="AdvancedPanel" IsVisible="False" Spacing="8" Margin="0,12,0,0">
+                    <TextBlock Text="Advanced Settings" FontWeight="SemiBold" FontSize="14" />
+
+                    <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="TX Frequency:" VerticalAlignment="Center" />
+                        <TextBox Name="TxFrequencyBox" Grid.Row="0" Grid.Column="1" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="RX Frequency:" VerticalAlignment="Center" />
+                        <TextBox Name="RxFrequencyBox" Grid.Row="1" Grid.Column="1" />
+
+                        <CheckBox Name="ScanCheck" Grid.Row="2" Grid.Column="1" Content="Include in Scan" />
+                        <CheckBox Name="TalkAroundCheck" Grid.Row="3" Grid.Column="1" Content="Talk Around" />
+                        <CheckBox Name="DeemphasisCheck" Grid.Row="4" Grid.Column="1" Content="De-emphasis" />
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

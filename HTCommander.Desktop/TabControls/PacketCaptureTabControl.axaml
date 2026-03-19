@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HTCommander.Desktop.TabControls.PacketCaptureTabControl">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="Silver" Height="46" Padding="10,0">
+            <Grid>
+                <TextBlock Text="Packet Capture" VerticalAlignment="Center"
+                           FontSize="14" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Spacing="4">
+                    <TextBlock Name="PacketCount" Text="0 packets"
+                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <CheckBox Name="ShowDecodeCheck" Content="Show Decode"
+                              Click="ShowDecode_Click" />
+                    <Button Content="Clear" Click="ClearButton_Click" Padding="8,2" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="150" />
+            </Grid.RowDefinitions>
+
+            <!-- Packet list -->
+            <DataGrid Name="PacketsGrid" Grid.Row="0" AutoGenerateColumns="False"
+                      IsReadOnly="True" CanUserSortColumns="True"
+                      SelectionChanged="PacketsGrid_SelectionChanged">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Time" Width="140" />
+                    <DataGridTextColumn Header="Channel" Width="100" />
+                    <DataGridTextColumn Header="Data" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                          Background="LightGray" />
+
+            <!-- Decode panel -->
+            <TextBox Name="DecodeText" Grid.Row="2" IsReadOnly="True"
+                     AcceptsReturn="True" TextWrapping="Wrap"
+                     FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                     Background="#F8F8F8" />
+        </Grid>
+    </DockPanel>
+</UserControl>

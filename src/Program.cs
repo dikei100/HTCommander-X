@@ -58,8 +58,12 @@ namespace HTCommander
         }
         static void MainEx(string[] args)
         {
-            // Initialize the global data broker
-            DataBroker.Initialize("HTCommander");
+            // Initialize the global data broker with Windows Registry settings store
+            DataBroker.Initialize(new RegistrySettingsStore("HTCommander"));
+
+            // Wire up app callbacks for Core code
+            AppCallbacks.BlockBoxEvent = BlockBoxEvent;
+            AppCallbacks.DebugLog = Debug;
 
             // No other instance running
             Application.ThreadException += new System.Threading.ThreadExceptionEventHandler(ExceptionSink);

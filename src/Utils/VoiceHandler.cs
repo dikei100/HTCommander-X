@@ -21,63 +21,7 @@ using HTCommander.SSTV;
 
 namespace HTCommander
 {
-    /// <summary>
-    /// Encoding type for voice text entries.
-    /// </summary>
-    public enum VoiceTextEncodingType
-    {
-        Voice,
-        Morse,
-        VoiceClip,
-        AX25,
-        BSS,
-        Recording,
-        Picture,
-        APRS,
-        Ident
-    }
-
-    /// <summary>
-    /// Represents a voice text entry (received or transmitted).
-    /// </summary>
-    public class DecodedTextEntry
-    {
-        public string Text { get; set; }
-        public string Channel { get; set; }
-        public DateTime Time { get; set; }
-        /// <summary>
-        /// True if this entry was received (decoded), false if it was sent (transmitted).
-        /// </summary>
-        public bool IsReceived { get; set; } = true;
-        /// <summary>
-        /// The encoding type used for this entry (Voice, Morse, etc.).
-        /// </summary>
-        public VoiceTextEncodingType Encoding { get; set; } = VoiceTextEncodingType.Voice;
-        /// <summary>
-        /// Source callsign (for BSS packets).
-        /// </summary>
-        public string Source { get; set; }
-        /// <summary>
-        /// Destination callsign (for BSS packets, may be null for broadcast).
-        /// </summary>
-        public string Destination { get; set; }
-        /// <summary>
-        /// Latitude coordinate if location data is available.
-        /// </summary>
-        public double Latitude { get; set; } = 0;
-        /// <summary>
-        /// Longitude coordinate if location data is available.
-        /// </summary>
-        public double Longitude { get; set; } = 0;
-        /// <summary>
-        /// Filename for picture entries (SSTV images) and recording entries.
-        /// </summary>
-        public string Filename { get; set; }
-        /// <summary>
-        /// Duration in seconds (for recording entries).
-        /// </summary>
-        public int Duration { get; set; } = 0;
-    }
+    // VoiceTextEncodingType and DecodedTextEntry are now in HTCommander.Core/VoiceTypes.cs
 
     /// <summary>
     /// Voice Handler - Listens to audio data from radios and converts speech to text using Whisper.
@@ -1109,14 +1053,14 @@ namespace HTCommander
                 {
                     broker.LogInfo("[VoiceHandler] Audio ended during SSTV decoding, finalizing partial SSTV reception");
 
-                    Bitmap partialImage = null;
+                    SkiaSharp.SKBitmap partialSkImage = null;
                     string modeName = null;
 
                     lock (_sstvLock)
                     {
                         if (_sstvMonitor != null)
                         {
-                            partialImage = _sstvMonitor.GetPartialImage();
+                            partialSkImage = _sstvMonitor.GetPartialImage();
                             _sstvMonitor.Reset();
                         }
                     }
@@ -1131,9 +1075,9 @@ namespace HTCommander
                     var args = new SstvDecodingCompleteEventArgs
                     {
                         ModeName = modeName,
-                        Width = partialImage?.Width ?? 0,
-                        Height = partialImage?.Height ?? 0,
-                        Image = partialImage
+                        Width = partialSkImage?.Width ?? 0,
+                        Height = partialSkImage?.Height ?? 0,
+                        Image = partialSkImage
                     };
                     OnSstvDecodingComplete(this, args);
                 }
@@ -1808,7 +1752,9 @@ namespace HTCommander
             {
                 if (_sstvMonitor != null)
                 {
-                    partialImage = _sstvMonitor.GetPartialImage();
+                    var skPartial = _sstvMonitor.GetPartialImage();
+                    partialImage = SkiaBitmapConverter.ToDrawingBitmap(skPartial);
+                    skPartial?.Dispose();
                 }
             }
 
@@ -1892,7 +1838,7 @@ namespace HTCommander
                 string filename = $"SSTV_{now:yyyy-MM-dd}_{now:HH-mm-ss}_{safeMode}.png";
                 string fullPath = Path.Combine(_sstvImagesPath, filename);
 
-                e.Image.Save(fullPath, ImageFormat.Png);
+                SkiaImageHelper.SavePng(e.Image, fullPath);
                 e.Image.Dispose();
 
                 broker.LogInfo($"[VoiceHandler] SSTV image saved: {filename}");

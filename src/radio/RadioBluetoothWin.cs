@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright 2026 Ylian Saint-Hilaire
 Licensed under the Apache License, Version 2.0 (the "License");
 http://www.apache.org/licenses/LICENSE-2.0
@@ -17,9 +17,9 @@ using Windows.Networking.Sockets;
 
 namespace HTCommander
 {
-    public class RadioBluetoothWin
+    public class RadioBluetoothWin : IRadioBluetooth
     {
-        private Radio parent;
+        private IRadioHost parent;
         private bool running = false;
         private StreamSocket bluetoothSocket = null;
         private RfcommDeviceService rfcommService = null;
@@ -29,17 +29,18 @@ namespace HTCommander
         private readonly object connectionLock = new object();
         private Task connectionTask = null;
         private bool isConnecting = false;
+        private bool _disposed = false;
 
-        public delegate void ConnectedEventHandler();
-        public event ConnectedEventHandler OnConnected;
-        public delegate void ReceivedDataHandler(RadioBluetoothWin sender, Exception error, byte[] value);
-        public event ReceivedDataHandler ReceivedData;
+        public event Action OnConnected;
+        public event Action<Exception, byte[]> ReceivedData;
 
         private static readonly string[] TargetDeviceNames = { "UV-PRO", "UV-50PRO", "GA-5WB", "VR-N75", "VR-N76", "VR-N7500", "VR-N7600" };
 
-        public RadioBluetoothWin(Radio parent) { this.parent = parent; }
+        public RadioBluetoothWin(IRadioHost parent) { this.parent = parent; }
 
         private void Debug(string msg) { parent.Debug("Transport: " + msg); }
+
+        public Task<bool> RequestPermissionsAsync() => Task.FromResult(true);
 
         public void Disconnect()
         {
@@ -47,17 +48,17 @@ namespace HTCommander
             {
                 if (running == false && connectionTask == null) return;
                 running = false;
-                
+
                 // Cancel the connection loop
                 try { connectionCts?.Cancel(); } catch (Exception) { }
             }
-            
+
             // Wait for the connection task to finish (with timeout)
             if (connectionTask != null)
             {
                 try { connectionTask.Wait(TimeSpan.FromSeconds(3)); } catch (Exception) { }
             }
-            
+
             lock (connectionLock)
             {
                 // Dispose resources in correct order
@@ -65,27 +66,27 @@ namespace HTCommander
                 try { inputStream?.Close(); } catch (Exception) { }
                 try { inputStream?.Dispose(); } catch (Exception) { }
                 inputStream = null;
-                
+
                 try { outputStream?.Close(); } catch (Exception) { }
                 try { outputStream?.Dispose(); } catch (Exception) { }
                 outputStream = null;
-                
+
                 try { bluetoothSocket?.Dispose(); } catch (Exception) { }
                 bluetoothSocket = null;
-                
+
                 try { rfcommService?.Dispose(); } catch (Exception) { }
                 rfcommService = null;
-                
+
                 try { connectionCts?.Dispose(); } catch (Exception) { }
                 connectionCts = null;
                 connectionTask = null;
             }
-            
+
             // Give the OS time to release the socket
             Thread.Sleep(100);
         }
 
-        public static async Task<bool> CheckBluetoothAsync()
+        public async Task<bool> CheckBluetoothAsync()
         {
             try
             {
@@ -99,12 +100,17 @@ namespace HTCommander
         {
             try
             {
-                return Task.Run(() => CheckBluetoothAsync()).GetAwaiter().GetResult();
+                return Task.Run(async () =>
+                {
+                    var adapter = await BluetoothAdapter.GetDefaultAsync();
+                    return adapter != null && adapter.IsLowEnergySupported || adapter.IsCentralRoleSupported;
+                }).GetAwaiter().GetResult();
             }
             catch (Exception) { return false; }
         }
 
-        public static async Task<string[]> GetDeviceNames()
+        // Static convenience methods for backward compatibility (used by MainForm, DebugTab)
+        public static async Task<string[]> GetDeviceNamesStatic()
         {
             List<string> r = new List<string>();
             var selector = BluetoothDevice.GetDeviceSelector();
@@ -117,9 +123,9 @@ namespace HTCommander
             return r.ToArray();
         }
 
-        public static async Task<Radio.CompatibleDevice[]> FindCompatibleDevices()
+        public static async Task<CompatibleDevice[]> FindCompatibleDevicesStatic()
         {
-            List<Radio.CompatibleDevice> compatibleDevices = new List<Radio.CompatibleDevice>();
+            List<CompatibleDevice> compatibleDevices = new List<CompatibleDevice>();
             var selector = BluetoothDevice.GetDeviceSelector();
             var devices = await DeviceInformation.FindAllAsync(selector);
             List<string> macs = new List<string>();
@@ -128,8 +134,6 @@ namespace HTCommander
             {
                 if (!TargetDeviceNames.Contains(deviceInfo.Name)) continue;
                 string mac = null;
-
-                // Parse MAC from format: "Bluetooth#Bluetooth[MAC1]-[MAC2]"
                 if (deviceInfo.Id.StartsWith("Bluetooth#Bluetooth"))
                 {
                     int dashIdx = deviceInfo.Id.IndexOf('-');
@@ -139,14 +143,24 @@ namespace HTCommander
                         mac = macWithColons.Replace(":", "").ToUpper();
                     }
                 }
-
                 if (mac != null && !macs.Contains(mac))
                 {
                     macs.Add(mac);
-                    compatibleDevices.Add(new Radio.CompatibleDevice(deviceInfo.Name, mac));
+                    compatibleDevices.Add(new CompatibleDevice(deviceInfo.Name, mac));
                 }
             }
             return compatibleDevices.ToArray();
+        }
+
+        // IRadioBluetooth interface implementations (instance methods)
+        public async Task<string[]> GetDeviceNames()
+        {
+            return await GetDeviceNamesStatic();
+        }
+
+        public async Task<CompatibleDevice[]> FindCompatibleDevices()
+        {
+            return await FindCompatibleDevicesStatic();
         }
 
         public bool Connect()
@@ -171,6 +185,9 @@ namespace HTCommander
             }
             catch (Exception ex) { Debug("Error sending: " + ex.Message); }
         }
+
+        public void OnPause() { /* No-op on desktop */ }
+        public void OnResume() { /* No-op on desktop */ }
 
         // Decode GAIA frame, returns bytes consumed or 0 if incomplete, -1 on error
         private static int GaiaDecode(byte[] data, int index, int len, out byte[] cmd)
@@ -203,13 +220,13 @@ namespace HTCommander
         private async void StartAsync()
         {
             CancellationToken cancellationToken;
-            
+
             lock (connectionLock)
             {
                 connectionCts = new CancellationTokenSource();
                 cancellationToken = connectionCts.Token;
             }
-            
+
             BluetoothDevice btDevice = null;
 
             // Connect with retries
@@ -287,7 +304,7 @@ namespace HTCommander
                 {
                     isConnecting = false;
                 }
-                parent.Disconnect("Unable to connect", Radio.RadioState.UnableToConnect);
+                parent.Disconnect("Unable to connect", RadioState.UnableToConnect);
                 return;
             }
 
@@ -297,7 +314,7 @@ namespace HTCommander
             {
                 byte[] accumulator = new byte[4096];
                 int accumulatorPtr = 0, accumulatorLen = 0;
-                
+
                 lock (connectionLock)
                 {
                     isConnecting = false;
@@ -310,12 +327,12 @@ namespace HTCommander
                         rfcommService = null;
                         return;
                     }
-                    
+
                     // Create stream wrappers for WinRT socket
                     inputStream = bluetoothSocket.InputStream.AsStreamForRead();
                     outputStream = bluetoothSocket.OutputStream.AsStreamForWrite();
                 }
-                
+
                 running = true;
                 OnConnected?.Invoke();
 
@@ -336,10 +353,10 @@ namespace HTCommander
                     {
                         running = false;
                         Disconnect();
-                        parent.Disconnect("Connection closed by remote host.", Radio.RadioState.Disconnected);
+                        parent.Disconnect("Connection closed by remote host.", RadioState.Disconnected);
                         break;
                     }
-                    
+
                     accumulatorLen += bytesRead;
                     if (accumulatorLen < 8) continue;
 
@@ -356,7 +373,7 @@ namespace HTCommander
                         accumulatorPtr += cmdSize;
                         accumulatorLen -= cmdSize;
 
-                        if (cmd != null) { ReceivedData?.Invoke(this, null, cmd); }
+                        if (cmd != null) { ReceivedData?.Invoke(null, cmd); }
                     }
 
                     // Reset accumulator position if needed
@@ -379,27 +396,36 @@ namespace HTCommander
                     running = false;
                     isConnecting = false;
                 }
-                
+
                 // Dispose resources in correct order
                 lock (connectionLock)
                 {
                     try { inputStream?.Close(); } catch (Exception) { }
                     try { inputStream?.Dispose(); } catch (Exception) { }
                     inputStream = null;
-                    
+
                     try { outputStream?.Close(); } catch (Exception) { }
                     try { outputStream?.Dispose(); } catch (Exception) { }
                     outputStream = null;
-                    
+
                     try { bluetoothSocket?.Dispose(); } catch (Exception) { }
                     bluetoothSocket = null;
-                    
+
                     try { rfcommService?.Dispose(); } catch (Exception) { }
                     rfcommService = null;
                 }
-                
+
                 Debug("Connection closed.");
-                parent.Disconnect("Connection closed.", Radio.RadioState.Disconnected);
+                parent.Disconnect("Connection closed.", RadioState.Disconnected);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                Disconnect();
+                _disposed = true;
             }
         }
     }

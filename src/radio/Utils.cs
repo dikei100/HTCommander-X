@@ -20,7 +20,7 @@ using static HTCommander.AX25Packet;
 
 namespace HTCommander
 {
-    public class Utils
+    public partial class Utils
     {
         /// <summary>
         /// Enables or disables double buffering on a control to reduce flickering.

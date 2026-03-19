@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HTCommander.Desktop.TabControls.DebugTabControl">
+    <DockPanel>
+        <!-- Header panel -->
+        <Border DockPanel.Dock="Top" Background="Silver" Height="46" Padding="10,0">
+            <Grid>
+                <TextBlock Text="Developer Debug" VerticalAlignment="Center"
+                           FontSize="14" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Spacing="4">
+                    <CheckBox Name="ShowBtFrames" Content="BT Frames"
+                              IsChecked="{Binding BluetoothFramesDebug}"
+                              Click="ShowBtFrames_Click" />
+                    <CheckBox Name="LoopbackCheck" Content="Loopback"
+                              Click="Loopback_Click" />
+                    <Button Name="ClearButton" Content="Clear" Click="ClearButton_Click"
+                            Padding="8,2" />
+                    <Button Name="SaveButton" Content="Save" Click="SaveButton_Click"
+                            Padding="8,2" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Log output -->
+        <TextBox Name="DebugLog" IsReadOnly="True" AcceptsReturn="True"
+                 TextWrapping="NoWrap" FontFamily="Consolas,Courier New,monospace"
+                 FontSize="12" Background="#F0F0F0" />
+    </DockPanel>
+</UserControl>

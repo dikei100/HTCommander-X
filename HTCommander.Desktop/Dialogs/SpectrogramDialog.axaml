@@ -1,0 +1,13 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HTCommander.Desktop.Dialogs.SpectrogramDialog"
+        Title="Spectrogram"
+        Width="640" Height="480"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="4">
+        <Button DockPanel.Dock="Bottom" Content="Close" Click="CloseButton_Click"
+                HorizontalAlignment="Right" Padding="16,6" Margin="4,8,4,4" />
+
+        <Image Name="SpectrogramImage" Stretch="Uniform" />
+    </DockPanel>
+</Window>

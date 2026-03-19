@@ -294,8 +294,8 @@ namespace HTCommander
 
                 parent.Debug($"WebSocket connected: {id}");
 
-                if (parent.radio.State == Radio.RadioState.Connected) { webSocketSender.EnqueueSend(Encoding.UTF8.GetBytes("wasconnected"), WebSocketMessageType.Text); }
-                else if (parent.radio.State == Radio.RadioState.Connecting) { webSocketSender.EnqueueSend(Encoding.UTF8.GetBytes("connecting"), WebSocketMessageType.Text); }
+                if (parent.radio.State == RadioState.Connected) { webSocketSender.EnqueueSend(Encoding.UTF8.GetBytes("wasconnected"), WebSocketMessageType.Text); }
+                else if (parent.radio.State == RadioState.Connecting) { webSocketSender.EnqueueSend(Encoding.UTF8.GetBytes("connecting"), WebSocketMessageType.Text); }
                 else { webSocketSender.EnqueueSend(Encoding.UTF8.GetBytes("disconnected"), WebSocketMessageType.Text); }
 
                 var buffer = new byte[65536]; // 64KB buffer
@@ -331,11 +331,11 @@ namespace HTCommander
                     {
                         string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
 
-                        if ((message == "connect") && (parent.radio.State == Radio.RadioState.Disconnected))
+                        if ((message == "connect") && (parent.radio.State == RadioState.Disconnected))
                         {
                             parent.connectToolStripMenuItem_Click(this, null);
                         }
-                        if ((message == "disconnect") && (parent.radio.State == Radio.RadioState.Connected))
+                        if ((message == "disconnect") && (parent.radio.State == RadioState.Connected))
                         {
                             parent.radio.Disconnect();
                         }

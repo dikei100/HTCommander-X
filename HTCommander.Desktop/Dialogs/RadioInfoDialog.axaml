@@ -1,0 +1,15 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HTCommander.Desktop.Dialogs.RadioInfoDialog"
+        Title="Radio Information"
+        Width="450" Height="350"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="12">
+        <Button DockPanel.Dock="Bottom" Content="Close" Click="CloseButton_Click"
+                HorizontalAlignment="Right" Padding="16,6" Margin="0,12,0,0" />
+
+        <ScrollViewer>
+            <StackPanel Name="InfoPanel" Spacing="6" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

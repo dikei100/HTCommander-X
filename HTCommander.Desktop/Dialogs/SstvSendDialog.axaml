@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HTCommander.Desktop.Dialogs.SstvSendDialog"
+        Title="Send SSTV Image"
+        Width="500" Height="400"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+            <Button Content="Send" Click="SendButton_Click" Padding="16,6" IsEnabled="False"
+                    Name="SendButton" />
+            <Button Content="Cancel" Click="CancelButton_Click" Padding="16,6" />
+        </StackPanel>
+
+        <StackPanel Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Mode:" VerticalAlignment="Center" Width="80" />
+                <ComboBox Name="ModeCombo" Width="200" SelectedIndex="0">
+                    <ComboBoxItem Content="Martin M1" />
+                    <ComboBoxItem Content="Martin M2" />
+                    <ComboBoxItem Content="Scottie S1" />
+                    <ComboBoxItem Content="Scottie S2" />
+                    <ComboBoxItem Content="Robot 36" />
+                    <ComboBoxItem Content="Robot 72" />
+                </ComboBox>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Select Image..." Click="SelectImage_Click" Padding="8,4" />
+                <TextBlock Name="ImagePath" Text="No image selected" VerticalAlignment="Center"
+                           Foreground="Gray" />
+            </StackPanel>
+
+            <!-- Image preview -->
+            <Border Background="#F0F0F0" Height="200" CornerRadius="4">
+                <Image Name="PreviewImage" Stretch="Uniform" />
+            </Border>
+        </StackPanel>
+    </DockPanel>
+</Window>

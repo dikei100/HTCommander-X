@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HTCommander.Desktop.TabControls.TorrentTabControl">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="Silver" Height="46" Padding="10,0">
+            <Grid>
+                <TextBlock Text="Torrent" VerticalAlignment="Center"
+                           FontSize="14" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Spacing="4">
+                    <CheckBox Name="ShowDetailsCheck" Content="Details" />
+                    <Button Name="ActivateButton" Content="Activate"
+                            Click="ActivateButton_Click" Padding="8,2" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <DataGrid Name="TorrentGrid" AutoGenerateColumns="False"
+                  IsReadOnly="True" CanUserSortColumns="True">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="File" Width="*" />
+                <DataGridTextColumn Header="Mode" Width="100" />
+                <DataGridTextColumn Header="Description" Width="200" />
+                <DataGridTextColumn Header="Status" Width="100" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</UserControl>

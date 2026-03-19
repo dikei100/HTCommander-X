@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HTCommander.Desktop.TabControls.ContactsTabControl">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="Silver" Height="46" Padding="10,0">
+            <Grid>
+                <TextBlock Text="Stations" VerticalAlignment="Center"
+                           FontSize="14" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Spacing="4">
+                    <Button Name="AddButton" Content="Add" Click="AddButton_Click" Padding="8,2" />
+                    <Button Name="EditButton" Content="Edit" Click="EditButton_Click"
+                            Padding="8,2" IsEnabled="False" />
+                    <Button Name="RemoveButton" Content="Remove" Click="RemoveButton_Click"
+                            Padding="8,2" IsEnabled="False" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <DataGrid Name="StationsGrid" AutoGenerateColumns="False"
+                  IsReadOnly="True" CanUserReorderColumns="True"
+                  CanUserSortColumns="True"
+                  SelectionChanged="StationsGrid_SelectionChanged">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Callsign" Width="120" />
+                <DataGridTextColumn Header="Name" Width="150" />
+                <DataGridTextColumn Header="Type" Width="100" />
+                <DataGridTextColumn Header="Description" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</UserControl>

@@ -33,6 +33,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\HTCommander.Core\HTCommander.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="GMap.NET.WinForms" Version="2.1.7" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="Spectrogram" Version="1.6.1" />
@@ -67,6 +71,62 @@
     <Compile Remove="Radio\WhisperEngine-01.cs" />
     <Compile Remove="Radio\WhisperEngine-02.cs" />
     <Compile Remove="Radio\WhisperEngine-03.cs" />
+    <!-- These are now in HTCommander.Core -->
+    <Compile Remove="Utils\DataBroker.cs" />
+    <Compile Remove="Utils\DataBrokerClient.cs" />
+
+    <!-- Radio module files moved to Core -->
+    <Compile Remove="radio\Radio.cs" />
+    <Compile Remove="radio\AX25Session.cs" />
+    <Compile Remove="radio\AX25Packet.cs" />
+    <Compile Remove="radio\AX25Address.cs" />
+    <Compile Remove="radio\SoftwareModem.cs" />
+    <Compile Remove="radio\RadioSettings.cs" />
+    <Compile Remove="radio\RadioChannelInfo.cs" />
+    <Compile Remove="radio\RadioDevInfo.cs" />
+    <Compile Remove="radio\RadioHtStatus.cs" />
+    <Compile Remove="radio\RadioPosition.cs" />
+    <Compile Remove="radio\RadioBssSettings.cs" />
+    <Compile Remove="radio\TncDataFragment.cs" />
+    <Compile Remove="radio\DmtfEngine.cs" />
+    <Compile Remove="radio\MorseCodeEngine.cs" />
+    <Compile Remove="radio\GpsLocation.cs" />
+    <Compile Remove="radio\FileDownloader.cs" />
+    <Compile Remove="radio\BSSPacket.cs" />
+
+    <!-- Utils files moved to Core -->
+    <Compile Remove="Utils\AprsHandler.cs" />
+    <Compile Remove="Utils\BbsHandler.cs" />
+    <Compile Remove="Utils\Torrent.cs" />
+    <Compile Remove="Utils\LogStore.cs" />
+    <Compile Remove="Utils\LogFileHandler.cs" />
+    <Compile Remove="Utils\PacketStore.cs" />
+    <Compile Remove="Utils\FrameDeduplicator.cs" />
+    <Compile Remove="Utils\ImportUtils.cs" />
+    <Compile Remove="Utils\BinaryDataFile.cs" />
+
+    <!-- Root files moved to Core -->
+    <Compile Remove="StationInfoClass.cs" />
+    <Compile Remove="ChannelImport.cs" />
+    <Compile Remove="Yapp.cs" />
+    <Compile Remove="Utils\VoiceHandler.cs" />
+
+    <!-- Library directories moved to Core -->
+    <Compile Remove="hamlib\**" />
+    <Compile Remove="sbc\**" />
+    <Compile Remove="adventurer\**" />
+    <Compile Remove="AprsParser\**" />
+    <Compile Remove="Gps\**" />
+    <Compile Remove="WinLink\**" />
+
+    <!-- Airplanes: only AirplaneMarker.cs stays (has System.Drawing/GMap deps) -->
+    <Compile Remove="Airplanes\Aircraft.cs" />
+    <Compile Remove="Airplanes\AirplaneHandler.cs" />
+    <Compile Remove="Airplanes\SbsDecoder.cs" />
+    <Compile Remove="Airplanes\AircraftDatabase.cs" />
+
+    <!-- SSTV: all moved to Core (SstvMonitor now uses SkiaSharp instead of System.Drawing) -->
+    <Compile Remove="SSTV\**" />
   </ItemGroup>
 
 </Project>

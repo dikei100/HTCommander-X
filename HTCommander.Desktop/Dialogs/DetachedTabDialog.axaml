@@ -1,0 +1,8 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HTCommander.Desktop.Dialogs.DetachedTabDialog"
+        Title="Detached Tab"
+        Width="800" Height="600"
+        WindowStartupLocation="CenterOwner">
+    <ContentControl Name="TabContentHost" />
+</Window>

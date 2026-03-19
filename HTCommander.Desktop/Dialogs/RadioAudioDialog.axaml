@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="HTCommander.Desktop.Dialogs.RadioAudioDialog"
+        Title="Radio Audio Settings"
+        Width="400" Height="280"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+            <Button Content="OK" Click="OkButton_Click" Padding="16,6" />
+            <Button Content="Close" Click="CloseButton_Click" Padding="16,6" />
+        </StackPanel>
+
+        <StackPanel Spacing="12">
+            <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Output Device:" VerticalAlignment="Center" />
+                <ComboBox Name="OutputDeviceBox" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Volume:" VerticalAlignment="Center" Margin="0,12,0,0" />
+                <Slider Name="VolumeSlider" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="100" Value="50"
+                        TickFrequency="1" IsSnapToTickEnabled="True" Margin="0,12,0,0" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Mute:" VerticalAlignment="Center" Margin="0,12,0,0" />
+                <CheckBox Name="MuteCheckBox" Grid.Row="2" Grid.Column="1" Margin="0,12,0,0" />
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Status:" VerticalAlignment="Center" Margin="0,12,0,0" />
+                <TextBlock Name="StatusText" Grid.Row="3" Grid.Column="1" Text="Ready" VerticalAlignment="Center" Margin="0,12,0,0" />
+            </Grid>
+        </StackPanel>
+    </DockPanel>
+</Window>

@@ -326,9 +326,10 @@ namespace HTCommander.Controls
 
         private void RemoveTorrentFromUI(TorrentFile file)
         {
-            if (file.ListViewItem != null && torrentListView.Items.Contains(file.ListViewItem))
+            var lvi = file.ListViewItem as ListViewItem;
+            if (lvi != null && torrentListView.Items.Contains(lvi))
             {
-                torrentListView.Items.Remove(file.ListViewItem);
+                torrentListView.Items.Remove(lvi);
                 file.ListViewItem = null;
             }
         }
@@ -380,22 +381,23 @@ namespace HTCommander.Controls
             string key = GetFileKey(file);
             
             // Check if we already have this file in the cache
-            if (fileCache.TryGetValue(key, out TorrentFile existingFile) && existingFile.ListViewItem != null && torrentListView.Items.Contains(existingFile.ListViewItem))
+            var existingLvi = (fileCache.TryGetValue(key, out TorrentFile existingFile) ? existingFile.ListViewItem as ListViewItem : null);
+            if (existingLvi != null && torrentListView.Items.Contains(existingLvi))
             {
                 // Update existing ListViewItem
-                existingFile.ListViewItem.SubItems[0].Text = file.FileName ?? "";
-                existingFile.ListViewItem.SubItems[1].Text = file.Mode.ToString();
-                existingFile.ListViewItem.SubItems[2].Text = file.Description ?? "";
-                existingFile.ListViewItem.ImageIndex = file.Completed ? 9 : 10;
-                
+                existingLvi.SubItems[0].Text = file.FileName ?? "";
+                existingLvi.SubItems[1].Text = file.Mode.ToString();
+                existingLvi.SubItems[2].Text = file.Description ?? "";
+                existingLvi.ImageIndex = file.Completed ? 9 : 10;
+
                 // Transfer the ListViewItem reference to the new file object
-                file.ListViewItem = existingFile.ListViewItem;
-                file.ListViewItem.Tag = file;
+                file.ListViewItem = existingLvi;
+                existingLvi.Tag = file;
                 
                 // Update cache with new file data
                 fileCache[key] = file;
                 
-                if ((torrentListView.SelectedItems.Count == 1) && (torrentListView.SelectedItems[0] == file.ListViewItem))
+                if ((torrentListView.SelectedItems.Count == 1) && (torrentListView.SelectedItems[0] == existingLvi))
                 {
                     torrentListView_SelectedIndexChanged(null, null);
                 }

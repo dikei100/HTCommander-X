@@ -49,15 +49,15 @@ namespace HTCommander
 
             InitializeComponent();
 
-            // Set UI context for broker callbacks and create main form broker client
-            DataBroker.SetUIContext(this);
+            // Set synchronization context for broker callbacks and create main form broker client
+            DataBroker.SetSyncContext(SynchronizationContext.Current);
             broker = new DataBrokerClient();
 
             // Add the data handlers
             DataBroker.AddDataHandler("FrameDeduplicator", new FrameDeduplicator());
             DataBroker.AddDataHandler("SoftwareModem", new SoftwareModem());
             DataBroker.AddDataHandler("PacketStore", new PacketStore());
-            DataBroker.AddDataHandler("VoiceHandler", new VoiceHandler());
+            DataBroker.AddDataHandler("VoiceHandler", new VoiceHandler(new WinSpeechServiceLocal()));
             DataBroker.AddDataHandler("LogStore", new LogStore());
             DataBroker.AddDataHandler("AprsHandler", new AprsHandler());
             DataBroker.AddDataHandler("Torrent", new Torrent());
@@ -256,17 +256,17 @@ namespace HTCommander
         private async void connectToolStripMenuItem_Click(object sender, EventArgs e)
         {
             // Check if Bluetooth is available
-            if (!RadioBluetoothWin.CheckBluetooth())
+            if (!RadioBluetoothWin.CheckBluetooth()) // TODO: Use IPlatformServices
             {
                 MessageBox.Show(this, "Bluetooth is not available on this system.", "Bluetooth Not Available", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             // Find compatible devices
-            Radio.CompatibleDevice[] allDevices;
+            CompatibleDevice[] allDevices;
             try
             {
-                allDevices = await RadioBluetoothWin.FindCompatibleDevices();
+                allDevices = await RadioBluetoothWin.FindCompatibleDevicesStatic();
             }
             catch (Exception ex)
             {
@@ -346,7 +346,7 @@ namespace HTCommander
             PublishConnectedRadios();
 
             // Set the radioPanelControl to this radio right away so we can see "Connecting" and "Unable to Connect" states
-            if (radioPanelControl.DeviceId <= 0 || !connectedRadios.Any(r => r.DeviceId == radioPanelControl.DeviceId && r.State == Radio.RadioState.Connected))
+            if (radioPanelControl.DeviceId <= 0 || !connectedRadios.Any(r => r.DeviceId == radioPanelControl.DeviceId && r.State == RadioState.Connected))
             {
                 radioPanelControl.DeviceId = deviceId;
             }
@@ -366,17 +366,17 @@ namespace HTCommander
 
             // Otherwise, show selector dialog with all radios
             // Check if Bluetooth is available
-            if (!RadioBluetoothWin.CheckBluetooth())
+            if (!RadioBluetoothWin.CheckBluetooth()) // TODO: Use IPlatformServices
             {
                 MessageBox.Show(this, "Bluetooth is not available on this system.", "Bluetooth Not Available", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             // Find compatible devices
-            Radio.CompatibleDevice[] allDevices;
+            CompatibleDevice[] allDevices;
             try
             {
-                allDevices = await RadioBluetoothWin.FindCompatibleDevices();
+                allDevices = await RadioBluetoothWin.FindCompatibleDevicesStatic();
             }
             catch (Exception ex)
             {
@@ -607,7 +607,7 @@ namespace HTCommander
             }
         }
 
-        private void ApplyStoredFriendlyNames(Radio.CompatibleDevice[] devices)
+        private void ApplyStoredFriendlyNames(CompatibleDevice[] devices)
         {
             // Get stored friendly names and Bluetooth names from DataBroker
             var friendlyNames = DataBroker.GetValue<Dictionary<string, string>>(0, "DeviceFriendlyName", null);
@@ -942,7 +942,7 @@ namespace HTCommander
             {
                 // If the radioPanelControl is not monitoring an existing connected radio, set it to this newly connected radio
                 int currentPanelDeviceId = radioPanelControl.DeviceId;
-                if (currentPanelDeviceId <= 0 || !connectedRadios.Any(r => r.DeviceId == currentPanelDeviceId && r.State == Radio.RadioState.Connected))
+                if (currentPanelDeviceId <= 0 || !connectedRadios.Any(r => r.DeviceId == currentPanelDeviceId && r.State == RadioState.Connected))
                 {
                     radioPanelControl.DeviceId = deviceId;
                 }
@@ -1017,7 +1017,7 @@ namespace HTCommander
             if (deviceId > 0)
             {
                 Radio radio = connectedRadios.FirstOrDefault(r => r.DeviceId == deviceId);
-                if (radio != null && radio.State == Radio.RadioState.Connected)
+                if (radio != null && radio.State == RadioState.Connected)
                 {
                     effectiveId = deviceId;
                 }
