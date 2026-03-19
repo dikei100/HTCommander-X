@@ -11,6 +11,11 @@ namespace HTCommander.Desktop.Dialogs
         private int deviceId;
         private bool isLoading = true;
 
+        public RadioAudioDialog()
+        {
+            InitializeComponent();
+        }
+
         public RadioAudioDialog(int deviceId)
         {
             InitializeComponent();

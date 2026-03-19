@@ -12,6 +12,11 @@ namespace HTCommander.Desktop.Dialogs
         private string filename;
         private ObservableCollection<PacketEntry> packets = new ObservableCollection<PacketEntry>();
 
+        public PacketCaptureViewerDialog()
+        {
+            InitializeComponent();
+        }
+
         public PacketCaptureViewerDialog(string filename)
         {
             InitializeComponent();

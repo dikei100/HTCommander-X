@@ -11,6 +11,11 @@ namespace HTCommander.Desktop.Dialogs
         private DataBrokerClient broker;
         private int deviceId;
 
+        public GpsDetailsDialog()
+        {
+            InitializeComponent();
+        }
+
         public GpsDetailsDialog(int deviceId)
         {
             InitializeComponent();

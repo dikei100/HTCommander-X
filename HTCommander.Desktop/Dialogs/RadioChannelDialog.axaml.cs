@@ -43,7 +43,7 @@ namespace HTCommander.Desktop.Dialogs
             PopulateFromInfo(info);
         }
 
-        private RadioChannelDialog()
+        public RadioChannelDialog()
         {
             InitializeComponent();
         }

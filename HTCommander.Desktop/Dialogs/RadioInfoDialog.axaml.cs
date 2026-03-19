@@ -10,6 +10,11 @@ namespace HTCommander.Desktop.Dialogs
         private DataBrokerClient broker;
         private int deviceId;
 
+        public RadioInfoDialog()
+        {
+            InitializeComponent();
+        }
+
         public RadioInfoDialog(int deviceId)
         {
             InitializeComponent();

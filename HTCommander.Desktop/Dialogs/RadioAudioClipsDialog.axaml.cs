@@ -12,6 +12,11 @@ namespace HTCommander.Desktop.Dialogs
         private int deviceId;
         private ObservableCollection<AudioClipEntry> clips = new ObservableCollection<AudioClipEntry>();
 
+        public RadioAudioClipsDialog()
+        {
+            InitializeComponent();
+        }
+
         public RadioAudioClipsDialog(int deviceId)
         {
             InitializeComponent();

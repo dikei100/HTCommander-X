@@ -27,6 +27,11 @@ namespace HTCommander.Desktop.Dialogs
         public bool ConnectRequested { get; private set; }
         public bool DisconnectRequested { get; private set; }
 
+        public RadioConnectionDialog()
+        {
+            InitializeComponent();
+        }
+
         public RadioConnectionDialog(CompatibleDevice[] devices)
         {
             InitializeComponent();
