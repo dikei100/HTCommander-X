@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +34,17 @@ jobs:
             -p:PublishTrimmed=false \
             -o publish/linux-x64
 
+      - name: Publish Windows x64
+        run: |
+          dotnet publish HTCommander.Desktop/HTCommander.Desktop.csproj \
+            -c Release \
+            -r win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=false \
+            -p:PublishTrimmed=false \
+            -p:EnableWindowsTargeting=true \
+            -o publish/win-x64
+
       - name: Build AppImage
         run: |
           APPDIR=AppDir
@@ -41,27 +52,21 @@ jobs:
           mkdir -p $APPDIR/usr/share/applications
           mkdir -p $APPDIR/usr/share/icons/hicolor/256x256/apps
 
-          # Copy published files
           cp -r publish/linux-x64/* $APPDIR/usr/bin/
 
-          # Desktop file
           cp packaging/linux/HTCommander.desktop $APPDIR/usr/share/applications/
           cp packaging/linux/HTCommander.desktop $APPDIR/
 
-          # Icon
           convert src/HTCommander.ico[0] -resize 256x256 $APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png
           cp $APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png $APPDIR/htcommander.png
           cp $APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png $APPDIR/.DirIcon
 
-          # AppRun
           printf '#!/bin/bash\nSELF=$(readlink -f "$0")\nHERE=${SELF%%/*}\nexport PATH="${HERE}/usr/bin:${PATH}"\nexport LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"\nexec "${HERE}/usr/bin/HTCommander.Desktop" "$@"\n' > $APPDIR/AppRun
           chmod +x $APPDIR/AppRun
 
-          # Download appimagetool
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
 
-          # Build AppImage
           ARCH=x86_64 ./appimagetool-x86_64.AppImage $APPDIR HTCommander-X-x86_64.AppImage
 
       - name: Build .deb
@@ -75,10 +80,8 @@ jobs:
           mkdir -p $DEBDIR/usr/share/applications
           mkdir -p $DEBDIR/usr/share/icons/hicolor/256x256/apps
 
-          # Copy published files
           cp -r publish/linux-x64/* $DEBDIR/opt/htcommander/
 
-          # Control file
           cat > $DEBDIR/DEBIAN/control << 'CTRL'
           Package: htcommander
           Section: hamradio
@@ -93,20 +96,16 @@ jobs:
            VR-N76, VR-N7500, and other compatible radios.
           Homepage: https://github.com/dikei100/HTCommander-X
           CTRL
-          # Fix indentation and insert version
           sed -i 's/^          //' $DEBDIR/DEBIAN/control
           sed -i "2i Version: ${VERSION}" $DEBDIR/DEBIAN/control
 
-          # Launcher script
           printf '#!/bin/bash\nexec /opt/htcommander/HTCommander.Desktop "$@"\n' > $DEBDIR/usr/bin/htcommander
           chmod +x $DEBDIR/usr/bin/htcommander
 
-          # Desktop file
           cp packaging/linux/HTCommander.desktop $DEBDIR/usr/share/applications/
           sed -i "s|Exec=HTCommander.Desktop|Exec=/opt/htcommander/HTCommander.Desktop|" \
               $DEBDIR/usr/share/applications/HTCommander.desktop
 
-          # Icon
           if [ -f AppDir/usr/share/icons/hicolor/256x256/apps/htcommander.png ]; then
             cp AppDir/usr/share/icons/hicolor/256x256/apps/htcommander.png \
               $DEBDIR/usr/share/icons/hicolor/256x256/apps/
@@ -118,7 +117,6 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
 
-          # Prepare staging directory
           RPMROOT=rpm-staging
           mkdir -p $RPMROOT/opt/htcommander
           mkdir -p $RPMROOT/usr/bin
@@ -154,7 +152,6 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
 
-          # Prepare staging directory
           ARCHROOT=arch-staging
           mkdir -p $ARCHROOT/opt/htcommander
           mkdir -p $ARCHROOT/usr/bin
@@ -186,59 +183,16 @@ jobs:
             -C $ARCHROOT \
             -p "htcommander-${VERSION}-1-x86_64.pkg.tar.zst"
 
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-artifacts
-          path: |
-            HTCommander-X-x86_64.AppImage
-            htcommander_*.deb
-            htcommander-*.rpm
-            htcommander-*.pkg.tar.zst
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Publish Windows x64
-        run: |
-          dotnet publish HTCommander.Desktop/HTCommander.Desktop.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=false `
-            -p:PublishTrimmed=false `
-            -o publish/win-x64
-
-      - name: Create zip
-        run: Compress-Archive -Path publish/win-x64/* -DestinationPath HTCommander-X-win-x64.zip
-
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifacts
-          path: HTCommander-X-win-x64.zip
-
-  release:
-    needs: [build-linux, build-windows]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - name: Create Windows zip
+        run: cd publish/win-x64 && zip -r ../../HTCommander-X-win-x64.zip .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            linux-artifacts/HTCommander-X-x86_64.AppImage
-            linux-artifacts/htcommander_*.deb
-            linux-artifacts/htcommander-*.rpm
-            linux-artifacts/htcommander-*.pkg.tar.zst
-            windows-artifacts/HTCommander-X-win-x64.zip
+            HTCommander-X-x86_64.AppImage
+            htcommander_*.deb
+            htcommander-*.rpm
+            htcommander-*.pkg.tar.zst
+            HTCommander-X-win-x64.zip
