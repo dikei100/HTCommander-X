@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG="${1:-Release}"
-VERSION="0.60"
+VERSION="0.1.0"
 PKGNAME="htcommander"
 DEBDIR="$ROOT_DIR/packaging/linux/${PKGNAME}_${VERSION}_amd64"
 OUTPUT_DIR="$ROOT_DIR/releases"

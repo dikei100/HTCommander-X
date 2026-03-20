@@ -10,6 +10,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
     <ApplicationIcon>..\src\HTCommander.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
