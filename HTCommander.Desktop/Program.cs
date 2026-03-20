@@ -53,7 +53,7 @@ namespace HTCommander.Desktop
             {
                 if (!AcquireSingleInstanceLock())
                 {
-                    Console.Error.WriteLine("HTCommander is already running.");
+                    Console.Error.WriteLine("HTCommander-X is already running.");
                     return;
                 }
             }
@@ -76,12 +76,12 @@ namespace HTCommander.Desktop
             // Set up unhandled exception handlers
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
-                Debug("--- HTCommander Unhandled Exception ---\r\n" + DateTime.Now +
+                Debug("--- HTCommander-X Unhandled Exception ---\r\n" + DateTime.Now +
                       "\r\nException: " + ((Exception)e.ExceptionObject).ToString());
             };
             TaskScheduler.UnobservedTaskException += (s, e) =>
             {
-                Debug("--- HTCommander Unhandled Task Exception ---\r\n" + DateTime.Now +
+                Debug("--- HTCommander-X Unhandled Task Exception ---\r\n" + DateTime.Now +
                       "\r\nException:\r\n" + e.Exception.ToString());
                 e.SetObserved();
             };

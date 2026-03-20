@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build HTCommander .deb package for Debian/Ubuntu
+# Build HTCommander-X .deb package for Debian/Ubuntu
 # Usage: ./build-deb.sh [Release|Debug]
 
 set -e
@@ -12,7 +12,7 @@ PKGNAME="htcommander"
 DEBDIR="$ROOT_DIR/packaging/linux/${PKGNAME}_${VERSION}_amd64"
 OUTPUT_DIR="$ROOT_DIR/releases"
 
-echo "=== Building HTCommander .deb package ==="
+echo "=== Building HTCommander-X .deb package ==="
 
 # Build the project
 echo "Building HTCommander.Desktop..."
@@ -40,12 +40,12 @@ Architecture: amd64
 Depends: libportaudio2, bluez
 Recommends: espeak-ng
 Maintainer: Ylian Saint-Hilaire
-Description: Ham Radio Commander for Bluetooth-enabled handhelds
- HTCommander is a cross-platform application for controlling
+Description: HTCommander-X - Cross-platform Ham Radio Commander
+ HTCommander-X is a cross-platform application for controlling
  Bluetooth-enabled ham radio handhelds. Supports UV-PRO, VR-N75,
  VR-N76, VR-N7500, and other compatible radios.
  Features: APRS, packet radio, voice, BBS, mail, maps, and more.
-Homepage: https://github.com/Ylianst/HTCommander
+Homepage: https://github.com/dikei100/HTCommander
 EOF
 
 # Symlink to /usr/bin

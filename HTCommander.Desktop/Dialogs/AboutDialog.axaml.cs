@@ -17,7 +17,7 @@ namespace HTCommander.Desktop.Dialogs
 
         private void GithubLink_Click(object sender, RoutedEventArgs e)
         {
-            Program.PlatformServices?.PlatformUtils?.OpenUrl("https://github.com/Ylianst/HTCommander");
+            Program.PlatformServices?.PlatformUtils?.OpenUrl("https://github.com/dikei100/HTCommander");
         }
 
         private void LicenseLink_Click(object sender, RoutedEventArgs e)

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build HTCommander AppImage for Linux
+# Build HTCommander-X AppImage for Linux
 # Usage: ./build-appimage.sh [Release|Debug]
 
 set -e
@@ -10,7 +10,7 @@ CONFIG="${1:-Release}"
 APPDIR="$ROOT_DIR/packaging/linux/AppDir"
 OUTPUT_DIR="$ROOT_DIR/releases"
 
-echo "=== Building HTCommander AppImage ==="
+echo "=== Building HTCommander-X AppImage ==="
 echo "Configuration: $CONFIG"
 
 # Clean and build
@@ -67,11 +67,11 @@ fi
 
 # Build AppImage
 mkdir -p "$OUTPUT_DIR"
-ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" "$OUTPUT_DIR/HTCommander-x86_64.AppImage"
+ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" "$OUTPUT_DIR/HTCommander-X-x86_64.AppImage"
 
 echo ""
 echo "=== AppImage built successfully ==="
-echo "Output: $OUTPUT_DIR/HTCommander-x86_64.AppImage"
+echo "Output: $OUTPUT_DIR/HTCommander-X-x86_64.AppImage"
 
 # Cleanup
 rm -rf "$APPDIR"

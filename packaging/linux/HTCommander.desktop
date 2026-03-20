@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=HTCommander
+Name=HTCommander-X
 Comment=Ham Radio Commander for Bluetooth-enabled handhelds
 Exec=HTCommander.Desktop
 Icon=htcommander
