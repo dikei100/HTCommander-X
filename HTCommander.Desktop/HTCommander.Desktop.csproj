@@ -3,20 +3,24 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
+    <!-- Use Windows TFM when targeting Windows, so we can reference Platform.Windows (net9.0-windows) -->
+    <TargetFramework Condition="$(RuntimeIdentifier.StartsWith('win')) OR ($([MSBuild]::IsOSPlatform('Windows')) AND '$(RuntimeIdentifier)' == '')">net9.0-windows10.0.19041.0</TargetFramework>
+    <EnableWindowsTargeting Condition="!$([MSBuild]::IsOSPlatform('Windows'))">true</EnableWindowsTargeting>
     <RootNamespace>HTCommander.Desktop</RootNamespace>
     <AssemblyName>HTCommander.Desktop</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+    <!-- RuntimeIdentifier is set via -r flag at publish time; don't pre-declare both here
+         as it conflicts with the conditional TFM (Windows TFM can't restore for linux-x64) -->
     <ApplicationIcon>..\src\HTCommander.ico</ApplicationIcon>
     <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HTCommander.Core\HTCommander.Core.csproj" />
-    <ProjectReference Include="..\HTCommander.Platform.Windows\HTCommander.Platform.Windows.csproj" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
-    <ProjectReference Include="..\HTCommander.Platform.Linux\HTCommander.Platform.Linux.csproj" Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
+    <ProjectReference Include="..\HTCommander.Platform.Windows\HTCommander.Platform.Windows.csproj" Condition="$(RuntimeIdentifier.StartsWith('win')) OR ($([MSBuild]::IsOSPlatform('Windows')) AND '$(RuntimeIdentifier)' == '')" />
+    <ProjectReference Include="..\HTCommander.Platform.Linux\HTCommander.Platform.Linux.csproj" Condition="$(RuntimeIdentifier.StartsWith('linux')) OR ($([MSBuild]::IsOSPlatform('Linux')) AND '$(RuntimeIdentifier)' == '')" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,7 +34,7 @@
   </ItemGroup>
 
   <!-- Conditional platform references -->
-  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win')) OR ($([MSBuild]::IsOSPlatform('Windows')) AND '$(RuntimeIdentifier)' == '')">
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="System.Speech" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
