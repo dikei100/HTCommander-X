@@ -3,7 +3,7 @@
 > Cross-platform fork of [HTCommander](https://github.com/Ylianst/HTCommander)
 > by Ylian Saint-Hilaire — adding Linux support and an Avalonia-based UI.
 
-![image](https://github.com/Ylianst/HTCommander/blob/main/docs/images/th-commander-4.png?raw=true)
+![HTCommander-X screenshot](docs/images/htcommander-x.png)
 
 An Amateur radio license is required to transmit using this software. You can get [information on a license here](https://www.arrl.org/getting-licensed).
 
@@ -25,6 +25,8 @@ An Amateur radio license is required to transmit using this software. You can ge
 - **Recording to WAV files** from radio audio
 - **APRS station markers** on map with OpenStreetMap
 
+*Information below is from the [original project](https://github.com/Ylianst/HTCommander).*
+
 ### Radio Support
 
 The following radios should work with this application:
@@ -40,23 +42,23 @@ The following radios should work with this application:
 
 ### Features
 
-- [Bluetooth Audio](https://github.com/dikei100/HTCommander/blob/main/docs/Bluetooth.md). Uses audio connectivity to listen and transmit with your computer speakers, microphone or headset.
-- [Speech-to-Text](https://github.com/dikei100/HTCommander/blob/main/docs/Voice.md). Open AI Whisper integration will convert audio to text, a Windows Speech API will convert text to speech.
-- [Channel Programming](https://github.com/dikei100/HTCommander/blob/main/docs/Channels.md). Configure, import, export and drag & drop channels to create the perfect configuration for your usages.
-- [APRS support](https://github.com/dikei100/HTCommander/blob/main/docs/APRS.md). Receive and send APRS messages, set APRS routes, send [SMS messages](https://github.com/dikei100/HTCommander/blob/main/docs/APRS-SMS.md) to normal phones, request [weather reports](https://github.com/dikei100/HTCommander/blob/main/docs/APRS-Weather.md), send [authenticated messages](https://github.com/dikei100/HTCommander/blob/main/docs/APRS-Auth.md), get details on each APRS message.
-- [BSS support](https://github.com/dikei100/HTCommander/blob/main/docs/BSS-Protocol.md). Support for the proprietary short message binary protocol from Baofeng / BTech.
-- [APRS map](https://github.com/dikei100/HTCommander/blob/main/docs/Map.md). With Open Street Map support, you can see all the APRS stations at a glance.
-- [Winlink mail support](https://github.com/dikei100/HTCommander/blob/main/docs/Mail.md). Send and receive email on the [Winlink network](https://winlink.org/), including support for attachments.
-- [SSTV](https://github.com/dikei100/HTCommander/blob/main/docs/SSTV.md) send and receive images. Reception is auto-detected, drag & drop to send.
-- [Torrent file exchange](https://github.com/dikei100/HTCommander/blob/main/docs/Torrent.md). Many-to-many file exchange with a torrent file transfer system over 1200 Baud FM-AFSK.
-- [Address book](https://github.com/dikei100/HTCommander/blob/main/docs/AddressBook.md). Store your APRS contacts and Terminal profiles in the address book for quick access.
-- [Terminal support](https://github.com/dikei100/HTCommander/blob/main/docs/Terminal.md). Use the terminal to communicate in packet modes with other stations, users or BBS'es.
-- [BBS support](https://github.com/dikei100/HTCommander/blob/main/docs/BBS.md). Built-in BBS with Winlink and a text adventure game. Route emails and challenge your friends to get a high score over packet radio.
-- [Packet Capture](https://github.com/dikei100/HTCommander/blob/main/docs/Capture.md). Capture and decode packets with the built-in packet capture feature.
-- [GPS Support](https://github.com/dikei100/HTCommander/blob/main/docs/GPS.md). Support for the radio's built-in GPS if you have radio firmware that supports it.
-- [Audio Clips](https://github.com/dikei100/HTCommander/blob/main/docs/Voice-Clips.md). Record and play back short voice clips on demand.
-- [AGWPE Protocol](https://github.com/dikei100/HTCommander/blob/main/docs/Agwpe.md). Route other application's traffic over the radio using the AGWPE protocol.
-- [AFSK 1200 Software modem](https://github.com/dikei100/HTCommander/blob/main/docs/SoftModem.md) with ECC/CRC error correction support.
+- [Bluetooth Audio](https://github.com/dikei100/HTCommander-X/blob/main/docs/Bluetooth.md). Uses audio connectivity to listen and transmit with your computer speakers, microphone or headset.
+- [Speech-to-Text](https://github.com/dikei100/HTCommander-X/blob/main/docs/Voice.md). Open AI Whisper integration will convert audio to text, a Windows Speech API will convert text to speech.
+- [Channel Programming](https://github.com/dikei100/HTCommander-X/blob/main/docs/Channels.md). Configure, import, export and drag & drop channels to create the perfect configuration for your usages.
+- [APRS support](https://github.com/dikei100/HTCommander-X/blob/main/docs/APRS.md). Receive and send APRS messages, set APRS routes, send [SMS messages](https://github.com/dikei100/HTCommander-X/blob/main/docs/APRS-SMS.md) to normal phones, request [weather reports](https://github.com/dikei100/HTCommander-X/blob/main/docs/APRS-Weather.md), send [authenticated messages](https://github.com/dikei100/HTCommander-X/blob/main/docs/APRS-Auth.md), get details on each APRS message.
+- [BSS support](https://github.com/dikei100/HTCommander-X/blob/main/docs/BSS-Protocol.md). Support for the proprietary short message binary protocol from Baofeng / BTech.
+- [APRS map](https://github.com/dikei100/HTCommander-X/blob/main/docs/Map.md). With Open Street Map support, you can see all the APRS stations at a glance.
+- [Winlink mail support](https://github.com/dikei100/HTCommander-X/blob/main/docs/Mail.md). Send and receive email on the [Winlink network](https://winlink.org/), including support for attachments.
+- [SSTV](https://github.com/dikei100/HTCommander-X/blob/main/docs/SSTV.md) send and receive images. Reception is auto-detected, drag & drop to send.
+- [Torrent file exchange](https://github.com/dikei100/HTCommander-X/blob/main/docs/Torrent.md). Many-to-many file exchange with a torrent file transfer system over 1200 Baud FM-AFSK.
+- [Address book](https://github.com/dikei100/HTCommander-X/blob/main/docs/AddressBook.md). Store your APRS contacts and Terminal profiles in the address book for quick access.
+- [Terminal support](https://github.com/dikei100/HTCommander-X/blob/main/docs/Terminal.md). Use the terminal to communicate in packet modes with other stations, users or BBS'es.
+- [BBS support](https://github.com/dikei100/HTCommander-X/blob/main/docs/BBS.md). Built-in BBS with Winlink and a text adventure game. Route emails and challenge your friends to get a high score over packet radio.
+- [Packet Capture](https://github.com/dikei100/HTCommander-X/blob/main/docs/Capture.md). Capture and decode packets with the built-in packet capture feature.
+- [GPS Support](https://github.com/dikei100/HTCommander-X/blob/main/docs/GPS.md). Support for the radio's built-in GPS if you have radio firmware that supports it.
+- [Audio Clips](https://github.com/dikei100/HTCommander-X/blob/main/docs/Voice-Clips.md). Record and play back short voice clips on demand.
+- [AGWPE Protocol](https://github.com/dikei100/HTCommander-X/blob/main/docs/Agwpe.md). Route other application's traffic over the radio using the AGWPE protocol.
+- [AFSK 1200 Software modem](https://github.com/dikei100/HTCommander-X/blob/main/docs/SoftModem.md) with ECC/CRC error correction support.
 
 ### Installation
 
@@ -71,7 +73,7 @@ Download the [MSI Installer](https://github.com/Ylianst/HTCommander/raw/refs/hea
 
 **General**
 
-Pair your radio to your computer and run the application. If your computer does not have Bluetooth, you can get an inexpensive Bluetooth USB dongle. Make sure Bluetooth LE is supported. Pairing can be tricky — you have to pair TWO Bluetooth devices in quick succession. See the [Bluetooth pairing instructions](https://github.com/dikei100/HTCommander/blob/main/docs/Paring.md).
+Pair your radio to your computer and run the application. If your computer does not have Bluetooth, you can get an inexpensive Bluetooth USB dongle. Make sure Bluetooth LE is supported. Pairing can be tricky — you have to pair TWO Bluetooth devices in quick succession. See the [Bluetooth pairing instructions](https://github.com/dikei100/HTCommander-X/blob/main/docs/Paring.md).
 
 ### Demonstration Video
 
