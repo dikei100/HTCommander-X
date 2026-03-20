@@ -100,6 +100,7 @@ namespace HTCommander.Platform.Linux
         private int _sampleRate;
         private int _bitsPerSample;
         private int _channels;
+        private int _outputChannels;
         private readonly object _bufferLock = new object();
         private byte[] _buffer = new byte[65536];
 
@@ -121,10 +122,13 @@ namespace HTCommander.Platform.Linux
         {
             if (stream != IntPtr.Zero) return;
 
+            // Always open as stereo (2 channels) — mono on stereo devices only plays left channel
+            _outputChannels = 2;
+
             var outputParams = new PortAudioNative.PaStreamParameters
             {
                 device = PortAudioNative.Pa_GetDefaultOutputDevice(),
-                channelCount = _channels,
+                channelCount = _outputChannels,
                 sampleFormat = (uint)(_bitsPerSample == 16 ? 0x00000008 : 0x00000001), // paInt16 or paFloat32
                 suggestedLatency = 0.1,
                 hostApiSpecificStreamInfo = IntPtr.Zero
@@ -168,17 +172,48 @@ namespace HTCommander.Platform.Linux
                 offset = 0;
             }
 
-            // Write directly to PortAudio
-            int frames = count / (_channels * (_bitsPerSample / 8));
-            IntPtr dataPtr = Marshal.AllocHGlobal(count);
-            try
+            // Duplicate mono to stereo if input is mono but output is stereo
+            int bytesPerSample = _bitsPerSample / 8;
+            int frames = count / (_channels * bytesPerSample);
+
+            if (_channels == 1 && _outputChannels == 2 && _bitsPerSample == 16)
             {
-                Marshal.Copy(buffer, offset, dataPtr, count);
-                PortAudioNative.Pa_WriteStream(stream, dataPtr, (uint)frames);
+                int stereoSize = frames * 2 * bytesPerSample;
+                IntPtr dataPtr = Marshal.AllocHGlobal(stereoSize);
+                try
+                {
+                    unsafe
+                    {
+                        byte* dst = (byte*)dataPtr;
+                        for (int i = 0; i < frames; i++)
+                        {
+                            int srcIdx = offset + i * bytesPerSample;
+                            byte lo = buffer[srcIdx];
+                            byte hi = buffer[srcIdx + 1];
+                            int dstIdx = i * 2 * bytesPerSample;
+                            dst[dstIdx] = lo;     dst[dstIdx + 1] = hi;  // Left
+                            dst[dstIdx + 2] = lo; dst[dstIdx + 3] = hi;  // Right
+                        }
+                    }
+                    PortAudioNative.Pa_WriteStream(stream, dataPtr, (uint)frames);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(dataPtr);
+                }
             }
-            finally
+            else
             {
-                Marshal.FreeHGlobal(dataPtr);
+                IntPtr dataPtr = Marshal.AllocHGlobal(count);
+                try
+                {
+                    Marshal.Copy(buffer, offset, dataPtr, count);
+                    PortAudioNative.Pa_WriteStream(stream, dataPtr, (uint)frames);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(dataPtr);
+                }
             }
         }
 

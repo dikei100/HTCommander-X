@@ -107,8 +107,10 @@ namespace HTCommander.Desktop.Dialogs
             radioDeviceId = deviceId;
             hasAudioSource = true;
             broker.Subscribe(deviceId, "AudioDataAvailable", OnAudioDataAvailable);
-            StatusText.Text = $"Radio {deviceId}";
-            Title = $"Spectrogram - Radio {deviceId}";
+            string friendlyName = DataBroker.GetValue<string>(deviceId, "FriendlyName", null);
+            string displayName = !string.IsNullOrEmpty(friendlyName) ? friendlyName : $"Radio {deviceId}";
+            StatusText.Text = displayName;
+            Title = $"Spectrogram - {displayName}";
         }
 
         private void OnAudioDataAvailable(int deviceId, string name, object data)

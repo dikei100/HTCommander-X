@@ -51,9 +51,6 @@
                 <Separator />
                 <MenuItem Name="MenuExportChannels" Header="_Export Channels..." Click="MenuExportChannels_Click" IsEnabled="False" />
                 <MenuItem Name="MenuImportChannels" Header="_Import Channels..." Click="MenuImportChannels_Click" />
-                <Separator />
-                <MenuItem Name="MenuSpectrogram" Header="S_pectrogram..." Click="MenuSpectrogram_Click" />
-                <MenuItem Name="MenuAudioClips" Header="Audio _Clips..." Click="MenuAudioClips_Click" IsEnabled="False" />
             </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Name="MenuRadioPanel" Header="_Radio Panel" Click="MenuRadioPanel_Click">
@@ -66,6 +63,9 @@
                         <CheckBox Name="AllChannelsCheck" BorderThickness="0" IsHitTestVisible="False" />
                     </MenuItem.Icon>
                 </MenuItem>
+                <Separator />
+                <MenuItem Name="MenuSpectrogram" Header="S_pectrogram..." Click="MenuSpectrogram_Click" />
+                <MenuItem Name="MenuAudioClips" Header="Audio _Clips..." Click="MenuAudioClips_Click" IsEnabled="False" />
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Name="MenuRadioInfo" Header="Radio _Information..." Click="MenuRadioInfo_Click" IsEnabled="False" />
