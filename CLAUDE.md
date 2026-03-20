@@ -49,21 +49,23 @@ All radio protocol logic, data handlers, codecs, and parsers. Key subsystems:
 - **RadioAudioManager**: Cross-platform audio pipeline (replaces Windows-only `RadioAudio.cs`). Uses `IRadioAudioTransport` for BT audio socket + `IAudioService` for local playback. Handles `TransmitVoicePCM` → SBC encode → RFCOMM, and receive loop → SBC decode → PortAudio output. Created automatically in `Radio` constructor when `platformServices != null`. Supports recording via `WavFileWriter` — `RecordingEnable`/`RecordingDisable` DataBroker events trigger WAV file recording of decoded PCM to `~/Documents/HTCommander/Recordings/`
 - **AgwpeServer**: AGWPE TCP server for external TNC client integration. Self-initializing DataBroker handler; auto-starts/stops based on `AgwpeServerEnabled`/`AgwpeServerPort` settings. Includes `AgwpeFrame` (36-byte header protocol) and per-client `AgwpeTcpClientHandler`. Forwards `UniqueDataFrame` as 'U' monitoring frames to connected clients.
 - **SmtpServer / ImapServer**: Local SMTP/IMAP servers for Winlink email integration. Wired via DataBroker — SMTP dispatches `MailReceived` on incoming email, IMAP reads mail list via `DataBroker.GetValue<List<WinLinkMail>>(1, "Mails", ...)`. Both read `CallSign`, `StationId`, `WinlinkPassword` from DataBroker for authentication.
+- **AudioClipHandler**: Manages audio clips stored as WAV files in `~/Documents/HTCommander/Clips/`. Handles `PlayAudioClip` (reads WAV, resamples to 32kHz, dispatches `TransmitVoicePCM`), `DeleteAudioClip`, `RenameAudioClip`, `SaveAudioClip`, `StopAudioClip`. Publishes `AudioClips` array of `AudioClipEntry` (Name, Duration, Size) on changes.
 
 ### Platform Projects
 
 **Platform.Windows** (net9.0-windows): WinRT Bluetooth, NAudio/WASAPI audio, System.Speech TTS, Windows Registry settings
 
-**Platform.Linux** (net9.0): Direct native RFCOMM sockets for Bluetooth, BlueZ D-Bus for device discovery/ACL, PortAudio for audio output, `parecord` subprocess for mic capture (PortAudio ALSA capture broken on PipeWire), espeak-ng TTS (22050→32kHz resampling), JSON file settings at `~/.config/HTCommander/`
+**Platform.Linux** (net9.0): Direct native RFCOMM sockets for Bluetooth, BlueZ D-Bus for device discovery/ACL, PortAudio for audio output (always opened as stereo, mono samples duplicated to both channels), `parecord` subprocess for mic capture (PortAudio ALSA capture broken on PipeWire), espeak-ng TTS (22050→32kHz resampling), JSON file settings at `~/.config/HTCommander/`
 
 ### HTCommander.Desktop (net9.0) — Avalonia UI
 
 - 10 tab controls + 40 dialogs + Mapsui map + left-side radio info panel with radio image overlay
 - Platform auto-detected at startup via reflection in `Program.cs`; conditional project references load Windows or Linux platform assembly
+- Single-instance enforcement via file lock (`~/.config/HTCommander/htcommander.lock`); bypass with `-multiinstance` flag
 - Supports Light/Dark/Auto themes via `ThemeDictionaries` in `App.axaml` with `App.SetTheme()`
 - Menu bar (File/Radio/View/Help), toolbar, and blue status bar
-- Radio menu: Dual Watch, Scan, GPS, Audio Enabled toggle, Software Modem toggle, channel Import/Export, Spectrogram, Audio Clips — all auto-enable/disable on radio connect/disconnect
-- View menu: Radio Panel toggle, All Channels toggle (show/hide empty channel slots, persisted via `ShowAllChannels` setting)
+- Radio menu: Dual Watch, Scan, GPS, Audio Enabled toggle, Software Modem toggle, channel Import/Export — all auto-enable/disable on radio connect/disconnect
+- View menu: Radio Panel toggle, All Channels toggle (show/hide empty channel slots, persisted via `ShowAllChannels` setting), Active Radio submenu (visible with 2+ radios, switches active radio panel), Spectrogram, Audio Clips
 - Help menu: Radio Information, GPS Information, Check for Updates (`SelfUpdateDialog`), About
 - Settings dialog tabs: General, APRS, Voice, Winlink, Servers, Data Sources, Audio, Modem. General tab has "Reset All Settings to Defaults". Audio controls (volume, squelch, output volume, mic gain, mute) in Settings → Audio tab
 - Image assets in `Assets/` auto-included as `AvaloniaResource` via csproj ItemGroup
@@ -84,7 +86,7 @@ Still builds and runs on Windows. References Core. Files moved to Core are exclu
 Components communicate via `DataBroker.Dispatch(deviceId, name, data)` and `broker.Subscribe(deviceId, name, callback)`. Device 0 = global settings (auto-persisted to ISettingsStore — int/string/bool written directly, complex types JSON-serialized with `~~JSON:{type}:{json}` prefix). Device 1 = app-level events. Device 100+ = connected radios. All UI callbacks are marshalled via `SynchronizationContext`. Settings dialog reads/writes via `DataBroker.GetValue<T>(0, name, default)` and `DataBroker.Dispatch(0, name, value)`.
 
 ### Data handler pattern
-Data handlers are global objects registered via `DataBroker.AddDataHandler("name", handler)`. Each creates its own `DataBrokerClient` in its parameterless constructor, subscribes to relevant events, and self-initializes. Handlers registered in `MainWindow.InitializeDataHandlers()`: FrameDeduplicator, SoftwareModem, PacketStore, VoiceHandler, LogStore, AprsHandler, Torrent, BbsHandler, MailStore, WinlinkClient, AirplaneHandler, GpsSerialHandler, AgwpeServer. Radio instances are also added as handlers dynamically on connect.
+Data handlers are global objects registered via `DataBroker.AddDataHandler("name", handler)`. Each creates its own `DataBrokerClient` in its parameterless constructor, subscribes to relevant events, and self-initializes. Handlers registered in `MainWindow.InitializeDataHandlers()`: FrameDeduplicator, SoftwareModem, PacketStore, VoiceHandler, LogStore, AprsHandler, Torrent, BbsHandler, MailStore, WinlinkClient, AirplaneHandler, GpsSerialHandler, AgwpeServer, AudioClipHandler. Radio instances are also added as handlers dynamically on connect.
 
 ### Tab control DataBroker wiring
 Each tab subscribes in its constructor and uses `Dispatcher.UIThread.Post()` for UI updates. Common pattern:
