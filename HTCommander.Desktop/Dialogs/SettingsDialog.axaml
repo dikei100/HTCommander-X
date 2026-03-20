@@ -109,6 +109,23 @@
                                            Minimum="1" Maximum="65535" Value="8000" HorizontalAlignment="Left" />
                         </Grid>
                     </StackPanel>
+                    <StackPanel Spacing="6">
+                        <CheckBox Name="RigctldServerCheck" Content="Enable Rigctld Server (Hamlib)" />
+                        <Grid ColumnDefinitions="110,*" Margin="24,0,0,0">
+                            <TextBlock Grid.Column="0" Text="Port:" VerticalAlignment="Center" />
+                            <NumericUpDown Name="RigctldPortUpDown" Grid.Column="1" Width="120"
+                                           Minimum="1" Maximum="65535" Value="4532" HorizontalAlignment="Left" />
+                        </Grid>
+                    </StackPanel>
+                    <StackPanel Spacing="6">
+                        <CheckBox Name="CatServerCheck" Content="Enable CAT Server (Kenwood TS-2000)" />
+                        <TextBlock Name="CatPortLabel" Text="" Foreground="{DynamicResource SecondaryText}" FontSize="11" Margin="24,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Spacing="6">
+                        <CheckBox Name="VirtualAudioCheck" Content="Enable Virtual Audio Bridge" />
+                        <TextBlock Text="Creates virtual audio devices for external software (requires PulseAudio/PipeWire)."
+                                   Foreground="{DynamicResource SecondaryText}" FontSize="11" Margin="24,0,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
                     <TextBlock Name="PortWarning" Text="" Foreground="#F44336" FontSize="11" />
                 </StackPanel>
             </TabItem>

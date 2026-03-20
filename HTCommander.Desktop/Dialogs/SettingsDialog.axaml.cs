@@ -97,6 +97,12 @@ namespace HTCommander.Desktop.Dialogs
             WebPortUpDown.Value = DataBroker.GetValue<int>(0, "WebServerPort", 8080);
             AgwpeServerCheck.IsChecked = DataBroker.GetValue<int>(0, "AgwpeServerEnabled", 0) == 1;
             AgwpePortUpDown.Value = DataBroker.GetValue<int>(0, "AgwpeServerPort", 8000);
+            RigctldServerCheck.IsChecked = DataBroker.GetValue<int>(0, "RigctldServerEnabled", 0) == 1;
+            RigctldPortUpDown.Value = DataBroker.GetValue<int>(0, "RigctldServerPort", 4532);
+            CatServerCheck.IsChecked = DataBroker.GetValue<int>(0, "CatServerEnabled", 0) == 1;
+            string catPath = DataBroker.GetValue<string>(1, "CatPortPath", "");
+            CatPortLabel.Text = string.IsNullOrEmpty(catPath) ? "" : $"CAT port: {catPath}";
+            VirtualAudioCheck.IsChecked = DataBroker.GetValue<int>(0, "VirtualAudioEnabled", 0) == 1;
 
             // Data Sources
             AirplaneServerBox.Text = DataBroker.GetValue<string>(0, "AirplaneServer", "");
@@ -255,6 +261,10 @@ namespace HTCommander.Desktop.Dialogs
             DataBroker.Dispatch(0, "WebServerPort", (int)(WebPortUpDown.Value ?? 8080));
             DataBroker.Dispatch(0, "AgwpeServerEnabled", AgwpeServerCheck.IsChecked == true ? 1 : 0);
             DataBroker.Dispatch(0, "AgwpeServerPort", (int)(AgwpePortUpDown.Value ?? 8000));
+            DataBroker.Dispatch(0, "RigctldServerEnabled", RigctldServerCheck.IsChecked == true ? 1 : 0);
+            DataBroker.Dispatch(0, "RigctldServerPort", (int)(RigctldPortUpDown.Value ?? 4532));
+            DataBroker.Dispatch(0, "CatServerEnabled", CatServerCheck.IsChecked == true ? 1 : 0);
+            DataBroker.Dispatch(0, "VirtualAudioEnabled", VirtualAudioCheck.IsChecked == true ? 1 : 0);
 
             // Data sources
             DataBroker.Dispatch(0, "AirplaneServer", AirplaneServerBox.Text ?? "");
@@ -470,11 +480,22 @@ namespace HTCommander.Desktop.Dialogs
 
         private bool ValidateSettings()
         {
-            if (WebServerCheck.IsChecked == true && AgwpeServerCheck.IsChecked == true &&
-                (int)(WebPortUpDown.Value ?? 0) == (int)(AgwpePortUpDown.Value ?? 0))
+            // Collect all enabled TCP server ports
+            var ports = new List<(string name, int port)>();
+            if (WebServerCheck.IsChecked == true) ports.Add(("Web Server", (int)(WebPortUpDown.Value ?? 8080)));
+            if (AgwpeServerCheck.IsChecked == true) ports.Add(("AGWPE Server", (int)(AgwpePortUpDown.Value ?? 8000)));
+            if (RigctldServerCheck.IsChecked == true) ports.Add(("Rigctld Server", (int)(RigctldPortUpDown.Value ?? 4532)));
+
+            for (int i = 0; i < ports.Count; i++)
             {
-                PortWarning.Text = "Web Server and AGWPE Server cannot use the same port.";
-                return false;
+                for (int j = i + 1; j < ports.Count; j++)
+                {
+                    if (ports[i].port == ports[j].port)
+                    {
+                        PortWarning.Text = $"{ports[i].name} and {ports[j].name} cannot use the same port.";
+                        return false;
+                    }
+                }
             }
             PortWarning.Text = "";
             return true;

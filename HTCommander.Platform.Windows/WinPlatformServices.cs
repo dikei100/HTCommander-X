@@ -38,5 +38,15 @@ namespace HTCommander.Platform.Windows
         {
             return new WinRadioAudioTransport();
         }
+
+        public IVirtualSerialPort CreateVirtualSerialPort()
+        {
+            return null; // Windows: use com0com for virtual COM ports
+        }
+
+        public IVirtualAudioProvider CreateVirtualAudioProvider()
+        {
+            return null; // Windows: use VB-CABLE for virtual audio
+        }
     }
 }

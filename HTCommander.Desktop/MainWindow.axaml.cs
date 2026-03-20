@@ -111,6 +111,9 @@ namespace HTCommander.Desktop
             DataBroker.AddDataHandler("GpsSerialHandler", new HTCommander.Gps.GpsSerialHandler());
             DataBroker.AddDataHandler("AgwpeServer", new AgwpeServer());
             DataBroker.AddDataHandler("AudioClipHandler", new AudioClipHandler());
+            DataBroker.AddDataHandler("RigctldServer", new RigctldServer());
+            DataBroker.AddDataHandler("CatSerialServer", new CatSerialServer(Program.PlatformServices));
+            DataBroker.AddDataHandler("VirtualAudioBridge", new VirtualAudioBridge(Program.PlatformServices));
         }
 
         private void OnRadioStateChanged(int deviceId, string name, object data)

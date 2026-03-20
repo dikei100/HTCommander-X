@@ -21,5 +21,7 @@ namespace HTCommander
         ISpeechService Speech { get; }
         IFilePickerService FilePicker { get; }
         IPlatformUtils PlatformUtils { get; }
+        IVirtualSerialPort CreateVirtualSerialPort();
+        IVirtualAudioProvider CreateVirtualAudioProvider();
     }
 }

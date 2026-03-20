@@ -38,5 +38,15 @@ namespace HTCommander.Platform.Linux
         {
             return new LinuxRadioAudioTransport();
         }
+
+        public IVirtualSerialPort CreateVirtualSerialPort()
+        {
+            return new LinuxVirtualSerialPort();
+        }
+
+        public IVirtualAudioProvider CreateVirtualAudioProvider()
+        {
+            return new LinuxVirtualAudioProvider();
+        }
     }
 }
