@@ -12,10 +12,13 @@ namespace HTCommander.Desktop.Dialogs
             InitializeComponent();
         }
 
-        public RadioFormDialog(int deviceId) : this()
+        public RadioFormDialog(int deviceId, string friendlyName = null) : this()
         {
             DeviceId = deviceId;
-            Title = $"Radio Panel - Device {deviceId}";
+            if (!string.IsNullOrEmpty(friendlyName))
+                Title = $"Radio Panel - {friendlyName}";
+            else
+                Title = $"Radio Panel - Device {deviceId}";
         }
 
         public void SetContent(Control content)

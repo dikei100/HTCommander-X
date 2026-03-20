@@ -5,6 +5,11 @@
         Title="HTCommander"
         Width="1200" Height="800"
         MinWidth="600" MinHeight="400">
+    <Window.Styles>
+        <Style Selector="Border.vfoCard:pointerover">
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
+    </Window.Styles>
     <DockPanel>
         <!-- Menu bar -->
         <Menu DockPanel.Dock="Top">
@@ -38,7 +43,11 @@
                         <CheckBox Name="AudioEnabledCheck" BorderThickness="0" IsHitTestVisible="False" />
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Name="MenuAudioControls" Header="Audio _Controls..." Click="MenuAudioControls_Click" IsEnabled="False" />
+                <MenuItem Name="MenuSoftwareModem" Header="Software _Modem" Click="MenuSoftwareModem_Click">
+                    <MenuItem.Icon>
+                        <CheckBox Name="SoftwareModemCheck" BorderThickness="0" IsHitTestVisible="False" />
+                    </MenuItem.Icon>
+                </MenuItem>
                 <Separator />
                 <MenuItem Name="MenuExportChannels" Header="_Export Channels..." Click="MenuExportChannels_Click" IsEnabled="False" />
                 <MenuItem Name="MenuImportChannels" Header="_Import Channels..." Click="MenuImportChannels_Click" />
@@ -59,7 +68,7 @@
         </Menu>
 
         <!-- Top toolbar -->
-        <Border DockPanel.Dock="Top" Background="#2D2D30" Padding="8,4">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource TabHeaderBackground}" Padding="8,4">
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Name="ConnectButton" Content="Connect Radio" Click="ConnectButton_Click" />
                 <Button Name="DisconnectButton" Content="Disconnect" Click="DisconnectButton_Click" IsEnabled="False" />
@@ -78,7 +87,7 @@
 
         <!-- Left radio info panel -->
         <Border Name="RadioPanel" DockPanel.Dock="Left" Width="300" IsVisible="False"
-                BorderBrush="#3F3F46" BorderThickness="0,0,1,0" Background="#1E1E1E">
+                BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,1,0" Background="{DynamicResource PanelBackground}">
             <ScrollViewer>
                 <StackPanel>
                     <!-- Radio image with overlaid display -->
@@ -127,42 +136,80 @@
                                    VerticalAlignment="Center" />
                     </Border>
 
+                    <!-- WAV transmit buttons -->
+                    <Grid Name="WavTransmitPanel" Margin="12,4,12,0" ColumnDefinitions="*,*" IsVisible="False">
+                        <Button Name="MainSelectWavButton" Grid.Column="0" Content="Select WAV..."
+                                Click="MainSelectWav_Click" Padding="4,4" Margin="0,0,2,0"
+                                HorizontalAlignment="Stretch" FontSize="11" />
+                        <Button Name="MainTransmitWavButton" Grid.Column="1" Content="Transmit File"
+                                Click="MainTransmitWav_Click" Padding="4,4" Margin="2,0,0,0"
+                                HorizontalAlignment="Stretch" FontSize="11" IsEnabled="False" />
+                    </Grid>
+                    <TextBlock Name="MainWavStatus" Text="" Foreground="{DynamicResource SecondaryText}" FontSize="10"
+                               Margin="12,2,12,0" HorizontalAlignment="Center" />
+
                     <!-- Info section below radio image -->
                     <StackPanel Margin="12,8,12,12" Spacing="6">
 
                         <!-- VFO A detail -->
-                        <Border Background="#252526" CornerRadius="4" Padding="10,6" BorderBrush="#3F3F46" BorderThickness="1">
+                        <Border Name="VfoACard" Classes="vfoCard" Background="{DynamicResource InfoCardBackground}" CornerRadius="4" Padding="10,6" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1"
+                                Cursor="Hand" DoubleTapped="VfoACard_DoubleTapped">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Change Channel..." Click="VfoAChangeChannel_Click" />
+                                    <MenuItem Header="Edit Frequency..." Click="VfoAEditFreq_Click" />
+                                    <Separator />
+                                    <MenuItem Name="VfoAFreqModeItem" Header="Frequency Mode" Click="VfoAFreqMode_Click" IsVisible="False">
+                                        <MenuItem.Icon>
+                                            <CheckBox Name="VfoAFreqModeCheck" BorderThickness="0" IsHitTestVisible="False" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </Border.ContextMenu>
                             <Grid ColumnDefinitions="Auto,*">
                                 <TextBlock Text="A" FontSize="18" FontWeight="Bold" Foreground="#4FC3F7"
                                            VerticalAlignment="Center" Margin="0,0,10,0" />
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Name="VfoAName" Text="--" FontSize="12" Foreground="#4FC3F7" FontWeight="SemiBold" />
-                                    <TextBlock Name="VfoAFreq" Text="--- .--- MHz" FontSize="16" Foreground="#E0E0E0"
+                                    <TextBlock Name="VfoAFreq" Text="--- .--- MHz" FontSize="16" Foreground="{DynamicResource PrimaryText}"
                                                FontFamily="Consolas,Liberation Mono,monospace" FontWeight="Bold" />
                                 </StackPanel>
                             </Grid>
                         </Border>
 
                         <!-- VFO B detail -->
-                        <Border Background="#252526" CornerRadius="4" Padding="10,6" BorderBrush="#3F3F46" BorderThickness="1">
+                        <Border Name="VfoBCard" Classes="vfoCard" Background="{DynamicResource InfoCardBackground}" CornerRadius="4" Padding="10,6" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1"
+                                Cursor="Hand" DoubleTapped="VfoBCard_DoubleTapped">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Change Channel..." Click="VfoBChangeChannel_Click" />
+                                    <MenuItem Header="Edit Frequency..." Click="VfoBEditFreq_Click" />
+                                    <Separator />
+                                    <MenuItem Name="VfoBFreqModeItem" Header="Frequency Mode" Click="VfoBFreqMode_Click" IsVisible="False">
+                                        <MenuItem.Icon>
+                                            <CheckBox Name="VfoBFreqModeCheck" BorderThickness="0" IsHitTestVisible="False" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </Border.ContextMenu>
                             <Grid ColumnDefinitions="Auto,*">
                                 <TextBlock Text="B" FontSize="18" FontWeight="Bold" Foreground="#81C784"
                                            VerticalAlignment="Center" Margin="0,0,10,0" />
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Name="VfoBName" Text="--" FontSize="12" Foreground="#81C784" FontWeight="SemiBold" />
-                                    <TextBlock Name="VfoBFreq" Text="--- .--- MHz" FontSize="16" Foreground="#E0E0E0"
+                                    <TextBlock Name="VfoBFreq" Text="--- .--- MHz" FontSize="16" Foreground="{DynamicResource PrimaryText}"
                                                FontFamily="Consolas,Liberation Mono,monospace" FontWeight="Bold" />
                                 </StackPanel>
                             </Grid>
                         </Border>
 
                         <!-- RSSI and TX bars -->
-                        <Border Background="#252526" CornerRadius="4" Padding="10,6" BorderBrush="#3F3F46" BorderThickness="1">
+                        <Border Background="{DynamicResource InfoCardBackground}" CornerRadius="4" Padding="10,6" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1">
                             <Grid ColumnDefinitions="50,*" RowDefinitions="Auto,Auto">
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="RSSI" Foreground="#888" FontSize="11" VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="RSSI" Foreground="{DynamicResource SecondaryText}" FontSize="11" VerticalAlignment="Center" />
                                 <ProgressBar Name="RssiBar" Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="16"
                                              Value="0" Height="12" Foreground="#4CAF50" Background="#333" />
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="TX" Foreground="#888" FontSize="11"
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="TX" Foreground="{DynamicResource SecondaryText}" FontSize="11"
                                            VerticalAlignment="Center" Margin="0,4,0,0" />
                                 <Border Name="TxIndicator" Grid.Row="1" Grid.Column="1" Height="12" Margin="0,4,0,0"
                                         Background="#333" CornerRadius="2">
@@ -172,35 +219,55 @@
                         </Border>
 
                         <!-- Status grid -->
-                        <Border Background="#252526" CornerRadius="4" Padding="10,6" BorderBrush="#3F3F46" BorderThickness="1">
+                        <Border Background="{DynamicResource InfoCardBackground}" CornerRadius="4" Padding="10,6" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1">
                             <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" Margin="0">
                                 <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,2">
-                                    <TextBlock Text="Battery" Foreground="#888" FontSize="10" />
-                                    <TextBlock Name="BatteryText" Text="--%" Foreground="#E0E0E0" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="Battery" Foreground="{DynamicResource SecondaryText}" FontSize="10" />
+                                    <TextBlock Name="BatteryText" Text="--%" Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="SemiBold" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,2">
-                                    <TextBlock Text="GPS" Foreground="#888" FontSize="10" />
-                                    <TextBlock Name="GpsText" Text="--" Foreground="#E0E0E0" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="GPS" Foreground="{DynamicResource SecondaryText}" FontSize="10" />
+                                    <TextBlock Name="GpsText" Text="--" Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="SemiBold" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,2">
-                                    <TextBlock Text="Squelch" Foreground="#888" FontSize="10" />
-                                    <TextBlock Name="SquelchText" Text="--" Foreground="#E0E0E0" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="Squelch" Foreground="{DynamicResource SecondaryText}" FontSize="10" />
+                                    <TextBlock Name="SquelchText" Text="--" Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="SemiBold" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,2">
-                                    <TextBlock Text="Scan" Foreground="#888" FontSize="10" />
-                                    <TextBlock Name="ScanText" Text="--" Foreground="#E0E0E0" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="Scan" Foreground="{DynamicResource SecondaryText}" FontSize="10" />
+                                    <TextBlock Name="ScanText" Text="--" Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="SemiBold" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,2">
-                                    <TextBlock Text="Power" Foreground="#888" FontSize="10" />
-                                    <TextBlock Name="PowerText" Text="--" Foreground="#E0E0E0" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="Power" Foreground="{DynamicResource SecondaryText}" FontSize="10" />
+                                    <TextBlock Name="PowerText" Text="--" Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="SemiBold" />
                                 </StackPanel>
                             </Grid>
                         </Border>
 
                         <!-- Channel list -->
-                        <TextBlock Text="Channels" FontSize="12" Foreground="#888" FontWeight="SemiBold" Margin="0,4,0,2" />
+                        <TextBlock Text="Channels" FontSize="12" Foreground="{DynamicResource SecondaryText}" FontWeight="SemiBold" Margin="0,4,0,2" />
                         <ListBox Name="ChannelList" DoubleTapped="ChannelList_DoubleTapped"
+                                 DragDrop.AllowDrop="True"
                                  Background="Transparent" Padding="0" BorderThickness="0">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Set as VFO A" Click="ChannelSetVfoA_Click" />
+                                    <MenuItem Header="Set as VFO B" Click="ChannelSetVfoB_Click" />
+                                    <Separator />
+                                    <MenuItem Header="Edit Channel..." Click="ChannelEdit_Click" />
+                                    <Separator />
+                                    <MenuItem Name="ChannelVfoAFreqModeItem" Header="VFO A Frequency Mode" Click="VfoAFreqMode_Click" IsVisible="False">
+                                        <MenuItem.Icon>
+                                            <CheckBox Name="ChannelVfoAFreqModeCheck" BorderThickness="0" IsHitTestVisible="False" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Name="ChannelVfoBFreqModeItem" Header="VFO B Frequency Mode" Click="VfoBFreqMode_Click" IsVisible="False">
+                                        <MenuItem.Icon>
+                                            <CheckBox Name="ChannelVfoBFreqModeCheck" BorderThickness="0" IsHitTestVisible="False" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
                             <ListBox.Styles>
                                 <Style Selector="ListBoxItem">
                                     <Setter Property="Padding" Value="0" />
@@ -218,10 +285,10 @@
                                     <Border Margin="0,1" Padding="6,3" CornerRadius="3"
                                             Background="{Binding Background}">
                                         <Grid ColumnDefinitions="22,*,Auto">
-                                            <TextBlock Grid.Column="0" Text="{Binding Id}" Foreground="#666" FontSize="10" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="0" Text="{Binding Id}" Foreground="{DynamicResource TertiaryText}" FontSize="10" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{Binding NameColor}" FontSize="11"
                                                        FontWeight="SemiBold" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Frequency}" Foreground="#888" FontSize="10"
+                                            <TextBlock Grid.Column="2" Text="{Binding Frequency}" Foreground="{DynamicResource SecondaryText}" FontSize="10"
                                                        FontFamily="Consolas,Liberation Mono,monospace" VerticalAlignment="Center" />
                                         </Grid>
                                     </Border>
@@ -235,8 +302,8 @@
 
         <!-- Main tab control -->
         <TabControl Name="MainTabControl" Margin="4">
-            <TabItem Header="Debug">
-                <tabs:DebugTabControl />
+            <TabItem Header="Communication">
+                <tabs:VoiceTabControl />
             </TabItem>
             <TabItem Header="Contacts">
                 <tabs:ContactsTabControl />
@@ -259,11 +326,11 @@
             <TabItem Header="APRS">
                 <tabs:AprsTabControl />
             </TabItem>
-            <TabItem Header="Voice">
-                <tabs:VoiceTabControl />
-            </TabItem>
             <TabItem Header="Map">
                 <tabs:MapTabControl />
+            </TabItem>
+            <TabItem Header="Debug">
+                <tabs:DebugTabControl />
             </TabItem>
         </TabControl>
     </DockPanel>

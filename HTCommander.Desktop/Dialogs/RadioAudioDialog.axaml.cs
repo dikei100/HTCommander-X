@@ -1,9 +1,11 @@
 using System;
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using HamLib;
 
 namespace HTCommander.Desktop.Dialogs
 {
@@ -18,6 +20,11 @@ namespace HTCommander.Desktop.Dialogs
         private bool isTransmitting = false;
         private int captureSampleRate;
         private int captureChannels;
+        private float micGain = 1.0f;
+
+        // WAV file transmit
+        private string selectedWavPath;
+        private bool isTransmittingWav = false;
 
         public RadioAudioDialog()
         {
@@ -93,6 +100,7 @@ namespace HTCommander.Desktop.Dialogs
             byte[] pcm = ResampleTo32kHz(data, bytesRecorded, captureSampleRate);
             if (pcm != null && pcm.Length > 0)
             {
+                ApplyGain(pcm, micGain);
                 if (micDataCount % 50 == 1) Log($"Transmitting mic PCM: {pcm.Length} bytes");
                 broker.Dispatch(deviceId, "TransmitVoicePCM", pcm, store: false);
             }
@@ -225,6 +233,28 @@ namespace HTCommander.Desktop.Dialogs
             int outputVol = broker.GetValue<int>(deviceId, "OutputAudioVolume", 100);
             OutputVolumeSlider.Value = outputVol;
             OutputVolumeText.Text = $"{outputVol}%";
+
+            // Mic gain
+            int micGainPct = broker.GetValue<int>(deviceId, "MicGain", 100);
+            MicGainSlider.Value = micGainPct;
+            MicGainText.Text = $"{micGainPct}%";
+            micGain = micGainPct / 100f;
+        }
+
+        private static void ApplyGain(byte[] pcm16, float gain)
+        {
+            if (gain == 1.0f) return;
+            int samples = pcm16.Length / 2;
+            for (int i = 0; i < samples; i++)
+            {
+                int offset = i * 2;
+                short s = (short)(pcm16[offset] | (pcm16[offset + 1] << 8));
+                int amplified = (int)(s * gain);
+                if (amplified > 32767) amplified = 32767;
+                else if (amplified < -32768) amplified = -32768;
+                pcm16[offset] = (byte)(amplified & 0xFF);
+                pcm16[offset + 1] = (byte)((amplified >> 8) & 0xFF);
+            }
         }
 
         #region DataBroker Event Handlers
@@ -312,9 +342,130 @@ namespace HTCommander.Desktop.Dialogs
             broker.Dispatch(deviceId, "OutputAudioVolume", vol);
         }
 
+        private void MicGainSlider_Changed(object sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            if (isLoading) return;
+            int pct = (int)MicGainSlider.Value;
+            micGain = pct / 100f;
+            MicGainText.Text = $"{pct}%";
+            broker.Dispatch(deviceId, "MicGain", pct);
+        }
+
         private void Mute_Click(object sender, RoutedEventArgs e)
         {
             DataBroker.Dispatch(deviceId, "SetMute", MuteCheck.IsChecked == true, store: false);
+        }
+
+        private async void SelectWav_Click(object sender, RoutedEventArgs e)
+        {
+            var picker = Program.PlatformServices?.FilePicker;
+            if (picker == null) return;
+
+            string path = await picker.PickFileAsync("Select Audio File",
+                new[] { "WAV Files|*.wav", "All Files|*.*" });
+            if (path == null) return;
+
+            selectedWavPath = path;
+            WavFileName.Text = System.IO.Path.GetFileName(path);
+            TransmitWavButton.IsEnabled = true;
+            WavStatusText.Text = "";
+        }
+
+        private void TransmitWav_Click(object sender, RoutedEventArgs e)
+        {
+            if (isTransmittingWav || string.IsNullOrEmpty(selectedWavPath)) return;
+
+            isTransmittingWav = true;
+            TransmitWavButton.IsEnabled = false;
+            SelectWavButton.IsEnabled = false;
+            WavStatusText.Text = "Reading file...";
+
+            string path = selectedWavPath;
+            float gain = micGain;
+            int devId = deviceId;
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    var (samples, wavParams) = WavFile.Read(path);
+
+                    // Convert stereo to mono if needed
+                    if (wavParams.NumChannels > 1)
+                    {
+                        int monoLen = samples.Length / wavParams.NumChannels;
+                        short[] mono = new short[monoLen];
+                        for (int i = 0; i < monoLen; i++)
+                        {
+                            int sum = 0;
+                            for (int ch = 0; ch < wavParams.NumChannels; ch++)
+                                sum += samples[i * wavParams.NumChannels + ch];
+                            mono[i] = (short)(sum / wavParams.NumChannels);
+                        }
+                        samples = mono;
+                    }
+
+                    // Convert to byte array
+                    byte[] pcmBytes = new byte[samples.Length * 2];
+                    for (int i = 0; i < samples.Length; i++)
+                    {
+                        pcmBytes[i * 2] = (byte)(samples[i] & 0xFF);
+                        pcmBytes[i * 2 + 1] = (byte)((samples[i] >> 8) & 0xFF);
+                    }
+
+                    // Resample to 32kHz if needed
+                    if (wavParams.SampleRate != 32000)
+                    {
+                        pcmBytes = ResampleTo32kHz(pcmBytes, pcmBytes.Length, wavParams.SampleRate);
+                    }
+
+                    if (pcmBytes == null || pcmBytes.Length == 0)
+                    {
+                        Dispatcher.UIThread.Post(() => WavStatusText.Text = "Error: resample failed");
+                        return;
+                    }
+
+                    // Apply mic gain
+                    ApplyGain(pcmBytes, gain);
+
+                    // Transmit in chunks (32kHz 16-bit = 64000 bytes/sec, send ~100ms chunks)
+                    int chunkSize = 6400; // 100ms at 32kHz 16-bit mono
+                    int totalChunks = (pcmBytes.Length + chunkSize - 1) / chunkSize;
+
+                    for (int c = 0; c < totalChunks; c++)
+                    {
+                        if (!isTransmittingWav) break;
+
+                        int offset = c * chunkSize;
+                        int len = Math.Min(chunkSize, pcmBytes.Length - offset);
+                        byte[] chunk = new byte[len];
+                        Array.Copy(pcmBytes, offset, chunk, 0, len);
+
+                        DataBroker.Dispatch(devId, "TransmitVoicePCM", new { Data = chunk, PlayLocally = false }, store: false);
+
+                        int pct = (c + 1) * 100 / totalChunks;
+                        Dispatcher.UIThread.Post(() => WavStatusText.Text = $"Transmitting... {pct}%");
+
+                        // Pace to real-time (100ms per chunk)
+                        Thread.Sleep(100);
+                    }
+
+                    Dispatcher.UIThread.Post(() => WavStatusText.Text = isTransmittingWav ? "Done" : "Cancelled");
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.UIThread.Post(() => WavStatusText.Text = $"Error: {ex.Message}");
+                }
+                finally
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        isTransmittingWav = false;
+                        TransmitWavButton.IsEnabled = !string.IsNullOrEmpty(selectedWavPath);
+                        SelectWavButton.IsEnabled = true;
+                    });
+                }
+            });
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
@@ -324,6 +475,7 @@ namespace HTCommander.Desktop.Dialogs
         protected override void OnClosed(EventArgs e)
         {
             StopTransmit();
+            isTransmittingWav = false;
             if (micInput != null)
             {
                 micInput.DataAvailable -= OnMicDataAvailable;

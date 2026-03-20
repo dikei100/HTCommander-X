@@ -112,7 +112,24 @@ namespace HTCommander.Desktop.TabControls
                 if (fragment.corrections >= 0)
                     header += $"  Corrections: {fragment.corrections}";
 
-                DecodeText.Text = header + "\n\n" + decode + "\n\nRaw: " + Utils.BytesToHex(fragment.data);
+                // Check for BSS packet
+                string bssDecode = "";
+                if (BSSPacket.IsBSSPacket(fragment.data))
+                {
+                    BSSPacket bss = BSSPacket.Decode(fragment.data);
+                    if (bss != null)
+                    {
+                        if (!string.IsNullOrEmpty(bss.Callsign)) bssDecode += $"\nCallsign: {bss.Callsign}";
+                        if (!string.IsNullOrEmpty(bss.Destination)) bssDecode += $"\nDestination: {bss.Destination}";
+                        if (!string.IsNullOrEmpty(bss.Message)) bssDecode += $"\nMessage: {bss.Message}";
+                        if (bss.Location != null) bssDecode += $"\nLocation: {bss.Location}";
+                        if (!string.IsNullOrEmpty(bss.LocationRequest)) bssDecode += $"\nLocation Request: {bss.LocationRequest}";
+                        if (!string.IsNullOrEmpty(bss.CallRequest)) bssDecode += $"\nCall Request: {bss.CallRequest}";
+                        if (bss.MessageID != 0) bssDecode += $"\nMessage ID: {bss.MessageID}";
+                    }
+                }
+
+                DecodeText.Text = header + bssDecode + "\n\n" + decode + "\n\nRaw: " + Utils.BytesToHex(fragment.data);
             }
         }
 

@@ -25,7 +25,7 @@ No test projects exist in this codebase.
 
 ## Architecture
 
-HTCommander is a ham radio controller for Bluetooth-enabled handhelds (UV-PRO, VR-N75, VR-N76, VR-N7500, etc.). It was migrated from a monolithic WinForms app to a multi-project cross-platform architecture.
+HTCommander is a ham radio controller for Bluetooth-enabled handhelds (UV-Pro, UV-50Pro, GA-5WB, VR-N75, VR-N76, VR-N7500, VR-N7600, RT-660). It was migrated from a monolithic WinForms app to a multi-project cross-platform architecture.
 
 ### Project Dependency Graph
 
@@ -37,7 +37,7 @@ HTCommander.Platform.Windows ────────┘
 src/ (original WinForms) ────────────┘
 ```
 
-### HTCommander.Core (net9.0) — 154 files, zero UI dependencies
+### HTCommander.Core (net9.0) — zero UI dependencies
 
 All radio protocol logic, data handlers, codecs, and parsers. Key subsystems:
 - **Radio.cs**: GAIA protocol over Bluetooth RFCOMM — the central class managing radio connections, commands, channels, GPS
@@ -45,17 +45,30 @@ All radio protocol logic, data handlers, codecs, and parsers. Key subsystems:
 - **Interfaces/**: Platform abstractions (`IPlatformServices`, `IRadioBluetooth`, `IAudioService`, `ISpeechService`, `ISettingsStore`, `IFilePickerService`, `IPlatformUtils`, `IRadioHost`, `IWhisperEngine`)
 - **radio/**: AX.25 packet protocol, SoftwareModem (DSP), GAIA frame encode/decode
 - **SSTV/**: Slow-scan TV image encode/decode using SkiaSharp (not System.Drawing)
-- **VoiceHandler**: Speech processing — takes `ISpeechService` constructor param, uses `VoiceHandler.WhisperEngineFactory` static delegate for STT
+- **VoiceHandler**: Speech processing — takes `ISpeechService` constructor param, uses `VoiceHandler.WhisperEngineFactory` static delegate for STT. Subscribes to `Chat`, `Speak`, `Morse` on AllDevices. Requires `VoiceHandlerEnable` with `{ DeviceId, Language, Model }` before it will transmit — fires when radio State becomes `"Connected"`
+- **RadioAudioManager**: Cross-platform audio pipeline (replaces Windows-only `RadioAudio.cs`). Uses `IRadioAudioTransport` for BT audio socket + `IAudioService` for local playback. Handles `TransmitVoicePCM` → SBC encode → RFCOMM, and receive loop → SBC decode → PortAudio output. Created automatically in `Radio` constructor when `platformServices != null`
+- **AgwpeServer**: AGWPE TCP server for external TNC client integration. Self-initializing DataBroker handler; auto-starts/stops based on `AgwpeServerEnabled`/`AgwpeServerPort` settings. Includes `AgwpeFrame` (36-byte header protocol) and per-client `AgwpeTcpClientHandler`. Forwards `UniqueDataFrame` as 'U' monitoring frames to connected clients.
 
 ### Platform Projects
 
 **Platform.Windows** (net9.0-windows): WinRT Bluetooth, NAudio/WASAPI audio, System.Speech TTS, Windows Registry settings
 
-**Platform.Linux** (net9.0): Direct native RFCOMM sockets for Bluetooth, BlueZ D-Bus for device discovery/ACL, PortAudio audio, espeak-ng TTS, JSON file settings at `~/.config/HTCommander/`
+**Platform.Linux** (net9.0): Direct native RFCOMM sockets for Bluetooth, BlueZ D-Bus for device discovery/ACL, PortAudio for audio output, `parecord` subprocess for mic capture (PortAudio ALSA capture broken on PipeWire), espeak-ng TTS (22050→32kHz resampling), JSON file settings at `~/.config/HTCommander/`
 
 ### HTCommander.Desktop (net9.0) — Avalonia UI
 
-10 tab controls + 40 dialogs + Mapsui map + left-side radio info panel with radio image overlay. Platform auto-detected at startup via reflection in `Program.cs`. Conditional project references load Windows or Linux platform assembly. Dark theme (`RequestedThemeVariant="Dark"` in App.axaml). Menu bar (File/Radio/View/Help), toolbar, and blue status bar. Radio menu has Dual Watch, Scan, GPS, Audio toggles, Audio Controls dialog, and channel Import/Export — all auto-enable/disable on radio connect/disconnect. Image assets in `Assets/` are auto-included as `AvaloniaResource` via csproj ItemGroup. Radio panel shows device image with screen overlay (VFO frequencies, signal), plus VFO cards, RSSI/TX bars, status grid, and double-click-to-edit channel list.
+- 10 tab controls + 40 dialogs + Mapsui map + left-side radio info panel with radio image overlay
+- Platform auto-detected at startup via reflection in `Program.cs`; conditional project references load Windows or Linux platform assembly
+- Supports Light/Dark/Auto themes via `ThemeDictionaries` in `App.axaml` with `App.SetTheme()`
+- Menu bar (File/Radio/View/Help), toolbar, and blue status bar
+- Radio menu: Dual Watch, Scan, GPS, Audio Enabled toggle, Software Modem toggle, channel Import/Export — all auto-enable/disable on radio connect/disconnect
+- Settings dialog tabs: General, APRS, Voice, Winlink, Servers, Data Sources, Audio, Modem. General tab has "Reset All Settings to Defaults". Audio controls (volume, squelch, output volume, mic gain, mute) in Settings → Audio tab
+- Image assets in `Assets/` auto-included as `AvaloniaResource` via csproj ItemGroup
+- Radio panel: device image with screen overlay (VFO frequencies, signal), VFO cards (double-click → channel picker, right-click → change channel or edit frequency), RSSI/TX bars, status grid, PTT button, WAV file transmit buttons (visible when connected)
+- Channel list sidebar: double-click to edit channel, right-click for "Set as VFO A/B" or "Edit Channel", drag-and-drop to copy channel settings between slots
+- VFO channel switching dispatches `ChannelChangeVfoA` / `ChannelChangeVfoB` to the active radio device — no Core changes needed, Radio.cs already handles these
+- VFO frequency mode toggle: `vfo_x` is a 2-bit field in `RadioSettings` (bit 0 = VFO A, bit 1 = VFO B; 0=memory, 1=frequency). Toggled via `WriteSettings` with `RadioSettings.ToByteArray(..., vfo_x)` overload. Context menu items only visible when `RadioDevInfo.support_vfo == true`
+- Tab order: Communication, Contacts, Packets, Terminal, BBS, Mail, Torrent, APRS, Map, Debug
 
 ### src/ (net9.0-windows) — Original WinForms app
 
@@ -65,6 +78,9 @@ Still builds and runs on Windows. References Core. Files moved to Core are exclu
 
 ### DataBroker event flow
 Components communicate via `DataBroker.Dispatch(deviceId, name, data)` and `broker.Subscribe(deviceId, name, callback)`. Device 0 = global settings (auto-persisted to ISettingsStore — int/string/bool written directly, complex types JSON-serialized with `~~JSON:{type}:{json}` prefix). Device 1 = app-level events. Device 100+ = connected radios. All UI callbacks are marshalled via `SynchronizationContext`. Settings dialog reads/writes via `DataBroker.GetValue<T>(0, name, default)` and `DataBroker.Dispatch(0, name, value)`.
+
+### Data handler pattern
+Data handlers are global objects registered via `DataBroker.AddDataHandler("name", handler)`. Each creates its own `DataBrokerClient` in its parameterless constructor, subscribes to relevant events, and self-initializes. Handlers registered in `MainWindow.InitializeDataHandlers()`: FrameDeduplicator, SoftwareModem, PacketStore, VoiceHandler, LogStore, AprsHandler, Torrent, BbsHandler, MailStore, WinlinkClient, AirplaneHandler, GpsSerialHandler, AgwpeServer. Radio instances are also added as handlers dynamically on connect.
 
 ### Tab control DataBroker wiring
 Each tab subscribes in its constructor and uses `Dispatcher.UIThread.Post()` for UI updates. Common pattern:
@@ -93,6 +109,25 @@ Connection flow: BlueZ D-Bus for ACL connect + device discovery → SDP channel 
 
 RFCOMM channel numbers vary by radio model and even between connections (VR-N76 uses channel 1 or 4 for commands, channel 2 for audio). Never hardcode channels.
 
+### Audio pipeline (RadioAudioManager)
+The radio uses a **separate RFCOMM channel** for audio (GenericAudio UUID `00001203`), distinct from the GAIA command channel. `RadioAudioManager` (Core) manages both directions:
+
+**Receive**: BT audio socket → 0x7E-framed SBC data → `SbcDecoder` → 16-bit 32kHz mono PCM → `IAudioOutput` (PortAudio on Linux)
+
+**Transmit**: Mic PCM (48kHz from `parecord`) → resample to 32kHz → `TransmitVoicePCM` dispatch → `SbcEncoder` → 0x7E escape framing → BT audio socket. Real-time pacing prevents BT buffer flooding.
+
+**Audio framing protocol**: `0x7E` start/end markers, `0x7D` escape byte (XOR `0x20`). First byte after start = command: `0x00` = audio data (receive), `0x01` = end/control, `0x02` = transmit loopback. End audio frame: `{ 0x7e, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7e }`.
+
+**SBC codec settings**: 32kHz, 16 blocks, mono, loudness allocation, 8 subbands, bitpool 18.
+
+**Linux audio transport** (`LinuxRadioAudioTransport`): Uses same native RFCOMM socket approach as command channel — `read()`/`write()` P/Invoke with `O_NONBLOCK`, not `NetworkStream` (which fails on RFCOMM fds with "not allowed on non-connected sockets").
+
+**Linux mic capture**: `parecord --format=s16le --rate=48000 --channels=1 --raw --latency-msec=20` — PortAudio's ALSA capture path is broken on PipeWire systems (mmap errors). `parecord` works reliably on PipeWire, PulseAudio, and ALSA.
+
+**PTT UI pattern**: Use `Border` with `PointerPressed`/`PointerReleased` (not `Button` — Avalonia `Button` swallows pointer events). Spacebar PTT needs 150ms debounce timer to handle Wayland key repeat (KeyUp+KeyDown pairs). On PTT release, don't cancel buffered audio — let transmission drain naturally.
+
+**WAV file transmit**: Read WAV via `HamLib.WavFile.Read()`, convert stereo→mono, resample to 32kHz, apply mic gain, chunk into 6400-byte (100ms) pieces, dispatch `TransmitVoicePCM` with 100ms pacing. Both `RadioAudioDialog` and `MainWindow` have this capability.
+
 ### GAIA protocol frame format
 ```
 [0xFF] [0x01] [flags] [body_length] [group_hi] [group_lo] [cmd_hi] [cmd_lo] [body...]
@@ -114,11 +149,39 @@ RFCOMM channel numbers vary by radio model and even between connections (VR-N76 
 - Avalonia dialogs use `Confirmed` bool property pattern for OK/Cancel results
 - Avalonia `ComboBox` has no `.Text` property — use `AutoCompleteBox` for editable text+dropdown combos, or `SelectedItem?.ToString()` for read-only combos
 - SSTV imaging uses SkiaSharp (`SKBitmap`), not System.Drawing. WinForms bridge: `SkiaBitmapConverter`
-- Avalonia Desktop uses **dark theme** (`RequestedThemeVariant="Dark"`) — tab headers use `#2D2D30`, text areas use `#1E1E1E`/`#D4D4D4`, GridSplitters use `#444`, card backgrounds use `#2D2D30`. Never use `Silver`, `LightGray`, or `#F0F0F0` backgrounds
+
+### Theme system
+Avalonia Desktop supports Light, Dark, and Auto (follow OS) themes. Colors are defined as `DynamicResource` references in AXAML files, backed by `ThemeDictionaries` in `App.axaml`. Theme preference stored as `DataBroker.GetValue<string>(0, "Theme", "Dark")`. Apply via `App.SetTheme(themeTag)`.
+
+**Theme resource keys** (use `{DynamicResource KeyName}` in AXAML):
+| Key | Dark | Light | Usage |
+|-----|------|-------|-------|
+| `TabHeaderBackground` | `#2D2D30` | `#F0F0F0` | Tab header bars, toolbar |
+| `CardBackground` | `#2D2D30` | `#F5F5F5` | Dialog section cards |
+| `PanelBackground` | `#1E1E1E` | `#FFFFFF` | Radio panel, text area backgrounds |
+| `TextAreaBackground` | `#1E1E1E` | `#FFFFFF` | TextBox read-only areas |
+| `TextAreaForeground` | `#D4D4D4` | `#1E1E1E` | TextBox text color |
+| `PanelBorder` | `#3F3F46` | `#D0D0D0` | Panel/card borders |
+| `InfoCardBackground` | `#252526` | `#F0F0F0` | VFO cards, status cards |
+| `SplitterColor` | `#444444` | `#C0C0C0` | GridSplitters |
+| `SstvPreviewBackground` | `#1E1E1E` | `#F0F0F0` | SSTV preview area |
+| `PrimaryText` | `#E0E0E0` | `#1E1E1E` | Data values (frequencies, battery, status values, channel names) |
+| `SecondaryText` | `#888888` | `#555555` | Labels (Battery, GPS, RSSI, channel frequencies) |
+| `TertiaryText` | `#666666` | `#777777` | Channel slot numbers |
+
+For programmatic theme-aware colors in code-behind, use `GetThemeBrush(resourceKey)` in `MainWindow.axaml.cs`.
+
+**Never use hardcoded dark colors** (`#2D2D30`, `#1E1E1E`, `#3F3F46`, `#252526`, `#444`) in AXAML backgrounds. Use the DynamicResource keys above. Accent/functional colors (PTT button red `#C62828`, status bar blue `#007ACC`, VFO frequency colors) are theme-independent.
+
+### Other conventions
 - Radio audio controls: `SetVolumeLevel` (int 0-15, hardware), `SetSquelchLevel` (int 0-9), `SetOutputVolume` (int 0-100, software), `SetAudio` (bool, streaming toggle), `SetMute` (bool). Radio reports back via `Volume` and `AudioState` events
-- Voice transmit modes dispatch to device 1: `Chat`, `Speak`, `Morse` (text commands); DTMF generates PCM locally via `DmtfEngine` and dispatches `TransmitVoicePCM` to radio device
+- Voice transmit modes dispatch to device 1: `Chat`, `Speak`, `Morse` (text commands); DTMF generates PCM locally via `DmtfEngine` and dispatches `TransmitVoicePCM` to radio device. VoiceHandler must be enabled first via `VoiceHandlerEnable` dispatch (happens automatically when radio state becomes `"Connected"`)
+- PTT mic transmit: captures at 48kHz via `parecord`, resamples to 32kHz with linear interpolation, dispatches `TransmitVoicePCM` directly to radio device (bypasses VoiceHandler)
 - Map tab uses Mapsui 5.0 with `WritableLayer` + `PointFeature` + `LabelStyle` for APRS station markers. APRS positions from `AprsPacket.Position.CoordinateSet.Latitude/Longitude.Value`
 - Settings are stored as int 0/1 for booleans that need cross-platform compat (e.g., `AllowTransmit`, `WebServerEnabled`), use `DataBroker.GetValue<int>(0, key, 0) == 1` to read
+- `RadioChannelInfo` has a copy constructor: `new RadioChannelInfo(source)` — used for channel drag-and-drop copy operations
+- Torrent file creation: compress with Brotli/Deflate (pick smallest), prepend compression type byte, hash with `Utils.ComputeShortSha256Hash()`, split into `Torrent.DefaultBlockSize` blocks
+- Software modem mode: `DataBroker.Dispatch(0, "SetSoftwareModemMode", modeTag)` where modeTag is `None`, `AFSK1200`, `PSK2400`, `PSK4800`, or `G3RUH9600`
 
 ## Repository Structure
 

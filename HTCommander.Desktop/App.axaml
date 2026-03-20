@@ -1,8 +1,42 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="HTCommander.Desktop.App"
-             RequestedThemeVariant="Dark">
+             RequestedThemeVariant="Default">
     <Application.Styles>
         <FluentTheme />
     </Application.Styles>
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="CardBackground" Color="#2D2D30" />
+                    <SolidColorBrush x:Key="PanelBackground" Color="#1E1E1E" />
+                    <SolidColorBrush x:Key="PanelBorder" Color="#3F3F46" />
+                    <SolidColorBrush x:Key="TabHeaderBackground" Color="#2D2D30" />
+                    <SolidColorBrush x:Key="TextAreaBackground" Color="#1E1E1E" />
+                    <SolidColorBrush x:Key="TextAreaForeground" Color="#D4D4D4" />
+                    <SolidColorBrush x:Key="SplitterColor" Color="#444444" />
+                    <SolidColorBrush x:Key="InfoCardBackground" Color="#252526" />
+                    <SolidColorBrush x:Key="SstvPreviewBackground" Color="#1E1E1E" />
+                    <SolidColorBrush x:Key="PrimaryText" Color="#E0E0E0" />
+                    <SolidColorBrush x:Key="SecondaryText" Color="#888888" />
+                    <SolidColorBrush x:Key="TertiaryText" Color="#666666" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="CardBackground" Color="#F5F5F5" />
+                    <SolidColorBrush x:Key="PanelBackground" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="PanelBorder" Color="#D0D0D0" />
+                    <SolidColorBrush x:Key="TabHeaderBackground" Color="#F0F0F0" />
+                    <SolidColorBrush x:Key="TextAreaBackground" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="TextAreaForeground" Color="#1E1E1E" />
+                    <SolidColorBrush x:Key="SplitterColor" Color="#C0C0C0" />
+                    <SolidColorBrush x:Key="InfoCardBackground" Color="#F0F0F0" />
+                    <SolidColorBrush x:Key="SstvPreviewBackground" Color="#F0F0F0" />
+                    <SolidColorBrush x:Key="PrimaryText" Color="#1E1E1E" />
+                    <SolidColorBrush x:Key="SecondaryText" Color="#555555" />
+                    <SolidColorBrush x:Key="TertiaryText" Color="#777777" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
 </Application>

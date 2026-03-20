@@ -15,7 +15,7 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch" Background="#444" />
+        <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch" Background="{DynamicResource SplitterColor}" />
 
         <DockPanel Grid.Row="2">
             <Button DockPanel.Dock="Bottom" Content="Close" Click="CloseButton_Click"
@@ -23,7 +23,7 @@
             <TextBox Name="DecodeBox" IsReadOnly="True"
                      FontFamily="Consolas,Menlo,monospace"
                      AcceptsReturn="True" TextWrapping="Wrap"
-                     Background="#1E1E1E" Foreground="#D4D4D4" />
+                     Background="{DynamicResource TextAreaBackground}" Foreground="{DynamicResource TextAreaForeground}" />
         </DockPanel>
     </Grid>
 </Window>

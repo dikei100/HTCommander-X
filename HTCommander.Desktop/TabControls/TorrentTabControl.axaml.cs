@@ -7,7 +7,9 @@ http://www.apache.org/licenses/LICENSE-2.0
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -65,6 +67,9 @@ namespace HTCommander.Desktop.TabControls
 
         private void UpdateActivateButtonState()
         {
+            bool hasRadios = connectedRadioIds.Count > 0;
+            AddFileButton.IsEnabled = hasRadios;
+
             if (isActive)
             {
                 ActivateButton.Content = "Deactivate";
@@ -150,6 +155,83 @@ namespace HTCommander.Desktop.TabControls
                     UpdateActivateButtonState();
                 }
             });
+        }
+
+        private async void AddFileButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Dialogs.AddTorrentFileDialog();
+            await dialog.ShowDialog((Window)this.VisualRoot);
+            if (!dialog.Confirmed || string.IsNullOrEmpty(dialog.Filename)) return;
+
+            try
+            {
+                var fileInfo = new System.IO.FileInfo(dialog.Filename);
+                if (fileInfo.Length > 10000000) return; // 10MB max
+
+                byte[] fileData = File.ReadAllBytes(dialog.Filename);
+                byte[] nameBytes = Encoding.UTF8.GetBytes(fileInfo.Name);
+                byte[] data0 = new byte[fileData.Length + nameBytes.Length + 1];
+                data0[0] = (byte)nameBytes.Length;
+                Array.Copy(nameBytes, 0, data0, 1, nameBytes.Length);
+                Array.Copy(fileData, 0, data0, nameBytes.Length + 1, fileData.Length);
+
+                byte[] dataBrotli = Utils.CompressBrotli(data0);
+                byte[] dataDeflate = Utils.CompressDeflate(data0);
+
+                var torrentFile = new TorrentFile();
+                torrentFile.Completed = true;
+                torrentFile.FileName = fileInfo.Name;
+                torrentFile.Description = dialog.Description ?? "";
+                torrentFile.Description = torrentFile.Description.Substring(0, Math.Min(torrentFile.Description.Length, 200));
+                torrentFile.Mode = dialog.Mode == 0 ? TorrentFile.TorrentModes.Sharing : TorrentFile.TorrentModes.Request;
+                torrentFile.Size = (int)fileInfo.Length;
+
+                byte[] dataSelected;
+                if (dataDeflate.Length < dataBrotli.Length && dataDeflate.Length < data0.Length)
+                {
+                    torrentFile.Compression = TorrentFile.TorrentCompression.Deflate;
+                    torrentFile.CompressedSize = dataDeflate.Length + 1;
+                    dataSelected = dataDeflate;
+                }
+                else if (dataBrotli.Length < dataDeflate.Length && dataBrotli.Length < data0.Length)
+                {
+                    torrentFile.Compression = TorrentFile.TorrentCompression.Brotli;
+                    torrentFile.CompressedSize = dataBrotli.Length + 1;
+                    dataSelected = dataBrotli;
+                }
+                else
+                {
+                    torrentFile.Compression = TorrentFile.TorrentCompression.None;
+                    torrentFile.CompressedSize = data0.Length + 1;
+                    dataSelected = data0;
+                }
+
+                // Add compression type byte
+                byte[] dataWithType = new byte[dataSelected.Length + 1];
+                dataWithType[0] = (byte)torrentFile.Compression;
+                Array.Copy(dataSelected, 0, dataWithType, 1, dataSelected.Length);
+
+                torrentFile.Id = Utils.ComputeShortSha256Hash(dataWithType);
+
+                // Create blocks
+                int blockSize = Torrent.DefaultBlockSize;
+                int blockCount = dataWithType.Length / blockSize;
+                if ((dataWithType.Length % blockSize) != 0) blockCount++;
+                torrentFile.Blocks = new byte[blockCount][];
+                for (int i = 0; i < blockCount; i++)
+                {
+                    int thisBlockSize = Math.Min(blockSize, dataWithType.Length - (i * blockSize));
+                    torrentFile.Blocks[i] = new byte[thisBlockSize];
+                    Array.Copy(dataWithType, i * blockSize, torrentFile.Blocks[i], 0, thisBlockSize);
+                }
+
+                torrentFile.WriteTorrentFile();
+                broker.Dispatch(0, "TorrentAddFile", torrentFile, store: false);
+            }
+            catch (Exception ex)
+            {
+                DataBroker.Dispatch(1, "LogError", $"[Torrent] Add file error: {ex.Message}", store: false);
+            }
         }
 
         private void ActivateButton_Click(object sender, RoutedEventArgs e)

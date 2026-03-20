@@ -5,12 +5,17 @@ http://www.apache.org/licenses/LICENSE-2.0
 */
 
 using System;
+using System.IO;
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using HTCommander.Desktop.Dialogs;
 using HTCommander.radio;
+using SkiaSharp;
 
 namespace HTCommander.Desktop.TabControls
 {
@@ -30,6 +35,7 @@ namespace HTCommander.Desktop.TabControls
             broker.Subscribe(1, "ConnectedRadios", OnConnectedRadiosChanged);
             broker.Subscribe(1, "VoiceHandlerState", OnVoiceHandlerStateChanged);
             broker.Subscribe(0, "AllowTransmit", OnAllowTransmitChanged);
+            broker.Subscribe(DataBroker.AllDevices, "SstvDecodingState", OnSstvDecodingState);
 
             // Load initial AllowTransmit
             int allow = broker.GetValue<int>(0, "AllowTransmit", 0);
@@ -54,6 +60,7 @@ namespace HTCommander.Desktop.TabControls
         private void UpdateTransmitState()
         {
             TransmitButton.IsEnabled = allowTransmit && hasConnectedRadios;
+            SendSstvButton.IsEnabled = allowTransmit && hasConnectedRadios;
         }
 
         private void OnVoiceEvent(int deviceId, string name, object data)
@@ -160,6 +167,168 @@ namespace HTCommander.Desktop.TabControls
                 UpdateTransmitState();
             });
         }
+
+        #region SSTV
+
+        private void OnSstvDecodingState(int deviceId, string name, object data)
+        {
+            if (data == null) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                // Use reflection to read properties from anonymous type
+                var type = data.GetType();
+                var activeProp = type.GetProperty("Active");
+                var modeNameProp = type.GetProperty("ModeName");
+                var percentProp = type.GetProperty("PercentComplete");
+                var widthProp = type.GetProperty("Width");
+                var heightProp = type.GetProperty("Height");
+
+                bool active = activeProp != null && (bool)activeProp.GetValue(data);
+                string modeName = modeNameProp?.GetValue(data) as string ?? "";
+                int percent = 0;
+                if (percentProp != null)
+                {
+                    object pVal = percentProp.GetValue(data);
+                    if (pVal is int pi) percent = pi;
+                    else if (pVal is double pd) percent = (int)pd;
+                    else if (pVal is float pf) percent = (int)pf;
+                }
+
+                SstvDecodePanel.IsVisible = active || percent >= 100;
+                SstvModeText.Text = modeName;
+                SstvProgressBar.Value = percent;
+
+                if (!active && percent >= 100)
+                {
+                    // Decode complete — try to get the final image from DataBroker
+                    var imageData = DataBroker.GetValue<object>(deviceId, "SstvDecodedImage", null);
+                    if (imageData != null)
+                    {
+                        ShowSstvImage(imageData);
+                    }
+                }
+            });
+        }
+
+        private void ShowSstvImage(object imageData)
+        {
+            try
+            {
+                // Image data could be SKBitmap or byte[]
+                if (imageData is SKBitmap skBmp)
+                {
+                    using (var encoded = skBmp.Encode(SKEncodedImageFormat.Png, 90))
+                    using (var stream = new MemoryStream(encoded.ToArray()))
+                    {
+                        SstvPreviewImage.Source = new Bitmap(stream);
+                    }
+                }
+                else if (imageData is byte[] bytes)
+                {
+                    using (var stream = new MemoryStream(bytes))
+                    {
+                        SstvPreviewImage.Source = new Bitmap(stream);
+                    }
+                }
+            }
+            catch (Exception) { }
+        }
+
+        private async void SendSstv_Click(object sender, RoutedEventArgs e)
+        {
+            int targetDeviceId = GetVoiceTargetDeviceId();
+            if (targetDeviceId < 0) return;
+
+            var dialog = new SstvSendDialog();
+            await dialog.ShowDialog((Window)this.VisualRoot);
+
+            if (!dialog.SendRequested || dialog.ScaledBitmap == null || string.IsNullOrEmpty(dialog.SelectedModeName))
+                return;
+
+            SKBitmap bitmap = dialog.ScaledBitmap;
+            string modeName = dialog.SelectedModeName;
+            int w = bitmap.Width;
+            int h = bitmap.Height;
+
+            // Extract ARGB pixels from SKBitmap
+            int[] pixels = new int[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    SKColor c = bitmap.GetPixel(x, y);
+                    pixels[y * w + x] = (c.Alpha << 24) | (c.Red << 16) | (c.Green << 8) | c.Blue;
+                }
+            }
+
+            VoiceStatus.Text = $"Encoding SSTV ({modeName})...";
+            SendSstvButton.IsEnabled = false;
+            int devId = targetDeviceId;
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    var encoder = new HTCommander.SSTV.Encoder(32000);
+                    float[] audioFloat = encoder.Encode(pixels, w, h, modeName);
+
+                    // Convert float audio (-1..1) to 16-bit PCM bytes
+                    byte[] pcm = new byte[audioFloat.Length * 2];
+                    for (int i = 0; i < audioFloat.Length; i++)
+                    {
+                        float clamped = Math.Clamp(audioFloat[i], -1f, 1f);
+                        short s = (short)(clamped * 32767);
+                        pcm[i * 2] = (byte)(s & 0xFF);
+                        pcm[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
+                    }
+
+                    // Transmit in chunks (32kHz 16-bit = 64000 bytes/sec, ~100ms chunks)
+                    int chunkSize = 6400;
+                    int totalChunks = (pcm.Length + chunkSize - 1) / chunkSize;
+
+                    for (int c = 0; c < totalChunks; c++)
+                    {
+                        int offset = c * chunkSize;
+                        int len = Math.Min(chunkSize, pcm.Length - offset);
+                        byte[] chunk = new byte[len];
+                        Array.Copy(pcm, offset, chunk, 0, len);
+
+                        DataBroker.Dispatch(devId, "TransmitVoicePCM", new { Data = chunk, PlayLocally = false }, store: false);
+
+                        if (c % 10 == 0)
+                        {
+                            int pct = (c + 1) * 100 / totalChunks;
+                            Dispatcher.UIThread.Post(() => VoiceStatus.Text = $"SSTV TX: {pct}%");
+                        }
+
+                        Thread.Sleep(100);
+                    }
+
+                    // Dispatch picture transmitted event for history
+                    DataBroker.Dispatch(devId, "PictureTransmitted", new { ModeName = modeName, Width = w, Height = h }, store: false);
+
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        VoiceStatus.Text = "SSTV TX complete";
+                        SendSstvButton.IsEnabled = allowTransmit && hasConnectedRadios;
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        VoiceStatus.Text = $"SSTV error: {ex.Message}";
+                        SendSstvButton.IsEnabled = allowTransmit && hasConnectedRadios;
+                    });
+                }
+                finally
+                {
+                    bitmap.Dispose();
+                }
+            });
+        }
+
+        #endregion
 
         private void AddMessage(string text, bool outbound, DateTime time)
         {

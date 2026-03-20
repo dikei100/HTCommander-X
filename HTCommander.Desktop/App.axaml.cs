@@ -8,6 +8,7 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
 
 namespace HTCommander.Desktop
 {
@@ -25,10 +26,26 @@ namespace HTCommander.Desktop
                 // Set the synchronization context for DataBroker UI marshalling
                 DataBroker.SetSyncContext(SynchronizationContext.Current);
 
+                // Apply saved theme
+                string savedTheme = DataBroker.GetValue<string>(0, "Theme", "Dark");
+                SetTheme(savedTheme);
+
                 desktop.MainWindow = new MainWindow();
             }
 
             base.OnFrameworkInitializationCompleted();
+        }
+
+        public static void SetTheme(string theme)
+        {
+            var app = Current;
+            if (app == null) return;
+            app.RequestedThemeVariant = theme switch
+            {
+                "Light" => ThemeVariant.Light,
+                "Dark" => ThemeVariant.Dark,
+                _ => ThemeVariant.Default // "Auto" → follow OS
+            };
         }
     }
 }

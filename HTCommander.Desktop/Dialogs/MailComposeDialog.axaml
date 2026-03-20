@@ -29,6 +29,6 @@
 
         <TextBox Name="BodyBox" AcceptsReturn="True" TextWrapping="Wrap"
                  Watermark="Type your message here..."
-                 Background="#1E1E1E" Foreground="#D4D4D4" />
+                 Background="{DynamicResource TextAreaBackground}" Foreground="{DynamicResource TextAreaForeground}" />
     </DockPanel>
 </Window>

@@ -5,14 +5,17 @@ http://www.apache.org/licenses/LICENSE-2.0
 */
 
 using System;
+using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using HamLib;
 using HTCommander.Desktop.Dialogs;
 
 namespace HTCommander.Desktop
@@ -38,6 +41,15 @@ namespace HTCommander.Desktop
         private RadioChannelInfo[] currentChannels;
         private RadioSettings currentSettings;
         private RadioHtStatus currentStatus;
+        private RadioDevInfo currentDevInfo;
+        private Dictionary<int, string> radioFriendlyNames = new Dictionary<int, string>();
+
+        private string GetRadioName(int deviceId)
+        {
+            if (radioFriendlyNames.TryGetValue(deviceId, out string name) && !string.IsNullOrEmpty(name))
+                return name;
+            return $"Radio {deviceId}";
+        }
 
         public MainWindow()
         {
@@ -60,8 +72,14 @@ namespace HTCommander.Desktop
             broker.Subscribe(DataBroker.AllDevices, "Settings", OnSettingsChanged);
             broker.Subscribe(DataBroker.AllDevices, "Channels", OnChannelsChanged);
             broker.Subscribe(DataBroker.AllDevices, "BatteryAsPercentage", OnBatteryChanged);
+            broker.Subscribe(DataBroker.AllDevices, "Info", OnDevInfoChanged);
             broker.Subscribe(DataBroker.AllDevices, "FriendlyName", OnFriendlyNameChanged);
             broker.Subscribe(DataBroker.AllDevices, "AudioState", OnAudioStateChanged);
+            broker.Subscribe(0, "SoftwareModemMode", OnSoftwareModemModeChanged);
+
+            // Init software modem checkbox
+            string modemMode = DataBroker.GetValue<string>(0, "SoftwareModemMode", "None");
+            SoftwareModemCheck.IsChecked = modemMode != null && modemMode != "None";
 
             broker.LogInfo("HTCommander Desktop (Avalonia) started. Ready to connect.");
         }
@@ -83,6 +101,7 @@ namespace HTCommander.Desktop
             DataBroker.AddDataHandler("WinlinkClient", new WinlinkClient());
             DataBroker.AddDataHandler("AirplaneHandler", new HTCommander.Airplanes.AirplaneHandler());
             DataBroker.AddDataHandler("GpsSerialHandler", new HTCommander.Gps.GpsSerialHandler());
+            DataBroker.AddDataHandler("AgwpeServer", new AgwpeServer());
         }
 
         private void OnRadioStateChanged(int deviceId, string name, object data)
@@ -94,8 +113,13 @@ namespace HTCommander.Desktop
                 switch (stateStr)
                 {
                     case "Connected":
-                        StatusText.Text = $"Radio {deviceId}: Connected";
-                        StatusBarText.Text = $"Connected to radio {deviceId}";
+                        if (!radioFriendlyNames.ContainsKey(deviceId))
+                        {
+                            string fn = DataBroker.GetValue<string>(deviceId, "FriendlyName", null);
+                            if (!string.IsNullOrEmpty(fn)) radioFriendlyNames[deviceId] = fn;
+                        }
+                        StatusText.Text = $"{GetRadioName(deviceId)}: Connected";
+                        StatusBarText.Text = $"Connected to {GetRadioName(deviceId)}";
                         ConnectButton.IsEnabled = true;
                         DisconnectButton.IsEnabled = true;
                         MenuDisconnect.IsEnabled = true;
@@ -106,22 +130,22 @@ namespace HTCommander.Desktop
                         MenuScan.IsEnabled = true;
                         MenuGpsEnabled.IsEnabled = true;
                         MenuAudioEnabled.IsEnabled = true;
-                        MenuAudioControls.IsEnabled = true;
                         MainPttButton.IsVisible = true;
+                        WavTransmitPanel.IsVisible = true;
                         activeDeviceId = deviceId;
                         if (RadioPanelCheck.IsChecked == true) RadioPanel.IsVisible = true;
                         RadioStateText.Text = "Connected";
                         RadioStateText.Foreground = new SolidColorBrush(Color.Parse("#4CAF50"));
                         break;
                     case "Connecting":
-                        StatusText.Text = $"Radio {deviceId}: Connecting...";
-                        StatusBarText.Text = $"Connecting to radio {deviceId}...";
+                        StatusText.Text = $"{GetRadioName(deviceId)}: Connecting...";
+                        StatusBarText.Text = $"Connecting to {GetRadioName(deviceId)}...";
                         RadioPanel.IsVisible = RadioPanelCheck.IsChecked == true;
                         RadioStateText.Text = "Connecting...";
                         RadioStateText.Foreground = new SolidColorBrush(Color.Parse("#FFC107"));
                         break;
                     case "Disconnected":
-                        StatusText.Text = connectedRadios.Count > 0 ? $"Radio {deviceId}: Disconnected" : "Not connected";
+                        StatusText.Text = connectedRadios.Count > 0 ? $"{GetRadioName(deviceId)}: Disconnected" : "Not connected";
                         StatusBarText.Text = "Ready";
                         ConnectButton.IsEnabled = true;
                         DisconnectButton.IsEnabled = false;
@@ -133,8 +157,9 @@ namespace HTCommander.Desktop
                         MenuScan.IsEnabled = false;
                         MenuGpsEnabled.IsEnabled = false;
                         MenuAudioEnabled.IsEnabled = false;
-                        MenuAudioControls.IsEnabled = false;
                         MainPttButton.IsVisible = false;
+                        WavTransmitPanel.IsVisible = false;
+                        MainWavStatus.Text = "";
                         BatteryStatusText.Text = "";
                         if (deviceId == activeDeviceId)
                         {
@@ -143,10 +168,11 @@ namespace HTCommander.Desktop
                             currentChannels = null;
                             currentSettings = null;
                             currentStatus = null;
+                            currentDevInfo = null;
                         }
                         break;
                     case "UnableToConnect":
-                        StatusText.Text = $"Radio {deviceId}: Unable to connect";
+                        StatusText.Text = $"{GetRadioName(deviceId)}: Unable to connect";
                         StatusBarText.Text = "Connection failed";
                         ConnectButton.IsEnabled = true;
                         RadioPanel.IsVisible = false;
@@ -170,10 +196,21 @@ namespace HTCommander.Desktop
 
         private void OnFriendlyNameChanged(int deviceId, string name, object data)
         {
+            string friendlyName = data?.ToString();
+            if (!string.IsNullOrEmpty(friendlyName))
+                radioFriendlyNames[deviceId] = friendlyName;
+
             if (deviceId != activeDeviceId) return;
             Dispatcher.UIThread.Post(() =>
             {
-                RadioNameText.Text = data?.ToString() ?? "Radio";
+                RadioNameText.Text = friendlyName ?? "Radio";
+                // Update status bar if connected
+                string stateStr = DataBroker.GetValue<string>(deviceId, "State", "");
+                if (stateStr == "Connected")
+                {
+                    StatusText.Text = $"{GetRadioName(deviceId)}: Connected";
+                    StatusBarText.Text = $"Connected to {GetRadioName(deviceId)}";
+                }
             });
         }
 
@@ -191,7 +228,7 @@ namespace HTCommander.Desktop
                 ScreenRssiText.Text = "S " + new string('▮', filled) + new string('▯', 8 - filled);
                 TxIndicatorFill.Background = status.is_in_tx ? Brushes.Red : new SolidColorBrush(Color.Parse("#333"));
                 GpsText.Text = status.is_gps_locked ? "Locked" : "No fix";
-                GpsText.Foreground = status.is_gps_locked ? Brushes.LimeGreen : new SolidColorBrush(Color.Parse("#E0E0E0"));
+                GpsText.Foreground = status.is_gps_locked ? Brushes.LimeGreen : GetThemeBrush("PrimaryText");
                 ScanText.Text = status.is_scan ? "Active" : "Off";
                 PowerText.Text = status.is_power_on ? "On" : "Off";
 
@@ -214,6 +251,7 @@ namespace HTCommander.Desktop
                 ScanCheck.IsChecked = settings.scan;
                 UpdateVfoDisplay();
                 UpdateChannelList();
+                UpdateVfoModeMenuItems();
             });
         }
 
@@ -245,6 +283,16 @@ namespace HTCommander.Desktop
                 BatteryText.Text = battStr;
                 BatteryStatusText.Text = $"Battery: {battStr}";
             });
+        }
+
+        private IBrush GetThemeBrush(string resourceKey)
+        {
+            var themeVariant = this.ActualThemeVariant;
+            if (this.TryFindResource(resourceKey, themeVariant, out object value) && value is IBrush brush)
+                return brush;
+            // Fallback: light text on dark theme, dark text on light theme
+            bool isDark = themeVariant?.ToString() == "Dark";
+            return isDark ? new SolidColorBrush(Color.Parse("#E0E0E0")) : new SolidColorBrush(Color.Parse("#1E1E1E"));
         }
 
         private static string FormatFrequency(int freq)
@@ -303,7 +351,7 @@ namespace HTCommander.Desktop
                 IBrush nameColor;
                 if (isA) { bg = new SolidColorBrush(Color.Parse("#1B3A4B")); nameColor = new SolidColorBrush(Color.Parse("#64B5F6")); }
                 else if (isB) { bg = new SolidColorBrush(Color.Parse("#2A1B3A")); nameColor = new SolidColorBrush(Color.Parse("#CE93D8")); }
-                else { bg = Brushes.Transparent; nameColor = new SolidColorBrush(Color.Parse("#E0E0E0")); }
+                else { bg = Brushes.Transparent; nameColor = GetThemeBrush("PrimaryText"); }
 
                 int deviceId = connectedRadios.Count > 0 ? connectedRadios[0].DeviceId : -1;
                 items.Add(new ChannelDisplayItem
@@ -533,11 +581,22 @@ namespace HTCommander.Desktop
             });
         }
 
-        private async void MenuAudioControls_Click(object sender, RoutedEventArgs e)
+        private void OnSoftwareModemModeChanged(int deviceId, string name, object data)
         {
-            if (activeDeviceId < 0) return;
-            var dialog = new Dialogs.RadioAudioDialog(activeDeviceId);
-            await dialog.ShowDialog(this);
+            Dispatcher.UIThread.Post(() =>
+            {
+                string mode = data?.ToString() ?? "None";
+                SoftwareModemCheck.IsChecked = mode != "None";
+            });
+        }
+
+        private void MenuSoftwareModem_Click(object sender, RoutedEventArgs e)
+        {
+            bool newState = !(SoftwareModemCheck.IsChecked == true);
+            SoftwareModemCheck.IsChecked = newState;
+            string mode = newState ? DataBroker.GetValue<string>(0, "SoftwareModemMode", "AFSK1200") : "None";
+            if (newState && mode == "None") mode = "AFSK1200";
+            DataBroker.Dispatch(0, "SetSoftwareModemMode", mode);
         }
 
         private async void MenuExportChannels_Click(object sender, RoutedEventArgs e)
@@ -617,6 +676,127 @@ namespace HTCommander.Desktop
             var dialog = new AboutDialog();
             await dialog.ShowDialog(this);
         }
+
+        #region VFO Channel Selection
+
+        private async void VfoACard_DoubleTapped(object sender, Avalonia.Input.TappedEventArgs e)
+        {
+            await OpenChannelPicker("A");
+        }
+
+        private async void VfoBCard_DoubleTapped(object sender, Avalonia.Input.TappedEventArgs e)
+        {
+            await OpenChannelPicker("B");
+        }
+
+        private async void VfoAChangeChannel_Click(object sender, RoutedEventArgs e)
+        {
+            await OpenChannelPicker("A");
+        }
+
+        private async void VfoBChangeChannel_Click(object sender, RoutedEventArgs e)
+        {
+            await OpenChannelPicker("B");
+        }
+
+        private void OnDevInfoChanged(int deviceId, string name, object data)
+        {
+            if (data is not RadioDevInfo info) return;
+            if (activeDeviceId < 0) activeDeviceId = deviceId;
+            if (deviceId != activeDeviceId) return;
+            currentDevInfo = info;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                UpdateVfoModeMenuItems();
+            });
+        }
+
+        private void UpdateVfoModeMenuItems()
+        {
+            bool supportsVfo = currentDevInfo?.support_vfo == true;
+            VfoAFreqModeItem.IsVisible = supportsVfo;
+            VfoBFreqModeItem.IsVisible = supportsVfo;
+            ChannelVfoAFreqModeItem.IsVisible = supportsVfo;
+            ChannelVfoBFreqModeItem.IsVisible = supportsVfo;
+
+            if (currentSettings != null)
+            {
+                bool aIsFreq = (currentSettings.vfo_x & 1) != 0;
+                bool bIsFreq = (currentSettings.vfo_x & 2) != 0;
+                VfoAFreqModeCheck.IsChecked = aIsFreq;
+                VfoBFreqModeCheck.IsChecked = bIsFreq;
+                ChannelVfoAFreqModeCheck.IsChecked = aIsFreq;
+                ChannelVfoBFreqModeCheck.IsChecked = bIsFreq;
+            }
+        }
+
+        private void ToggleVfoMode(string vfo)
+        {
+            if (activeDeviceId < 0 || currentSettings == null) return;
+            int currentVfoX = currentSettings.vfo_x;
+            if (vfo == "A")
+                currentVfoX ^= 1; // toggle bit 0
+            else
+                currentVfoX ^= 2; // toggle bit 1
+            DataBroker.Dispatch(activeDeviceId, "WriteSettings",
+                currentSettings.ToByteArray(currentSettings.channel_a, currentSettings.channel_b,
+                    currentSettings.double_channel, currentSettings.scan, currentSettings.squelch_level, currentVfoX),
+                store: false);
+        }
+
+        private void VfoAFreqMode_Click(object sender, RoutedEventArgs e) => ToggleVfoMode("A");
+        private void VfoBFreqMode_Click(object sender, RoutedEventArgs e) => ToggleVfoMode("B");
+
+        private async System.Threading.Tasks.Task OpenChannelPicker(string vfo)
+        {
+            if (activeDeviceId < 0 || currentChannels == null || currentSettings == null) return;
+            int currentIndex = vfo == "A" ? currentSettings.channel_a : currentSettings.channel_b;
+            var dialog = new Dialogs.ChannelPickerDialog(vfo, currentChannels, currentIndex);
+            await dialog.ShowDialog(this);
+            if (dialog.Confirmed && dialog.SelectedChannelIndex >= 0)
+            {
+                string dispatchName = vfo == "A" ? "ChannelChangeVfoA" : "ChannelChangeVfoB";
+                DataBroker.Dispatch(activeDeviceId, dispatchName, dialog.SelectedChannelIndex, store: false);
+            }
+        }
+
+        private async void VfoAEditFreq_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0 || currentSettings == null) return;
+            var dialog = new Dialogs.RadioChannelDialog(activeDeviceId, currentSettings.channel_a);
+            await dialog.ShowDialog(this);
+        }
+
+        private async void VfoBEditFreq_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0 || currentSettings == null) return;
+            var dialog = new Dialogs.RadioChannelDialog(activeDeviceId, currentSettings.channel_b);
+            await dialog.ShowDialog(this);
+        }
+
+        private void ChannelSetVfoA_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0 || ChannelList.SelectedItem is not ChannelDisplayItem item) return;
+            DataBroker.Dispatch(activeDeviceId, "ChannelChangeVfoA", item.ChannelIndex, store: false);
+        }
+
+        private void ChannelSetVfoB_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0 || ChannelList.SelectedItem is not ChannelDisplayItem item) return;
+            DataBroker.Dispatch(activeDeviceId, "ChannelChangeVfoB", item.ChannelIndex, store: false);
+        }
+
+        private async void ChannelEdit_Click(object sender, RoutedEventArgs e)
+        {
+            if (ChannelList.SelectedItem is ChannelDisplayItem item && item.DeviceId >= 0)
+            {
+                var dialog = new Dialogs.RadioChannelDialog(item.DeviceId, item.ChannelIndex);
+                await dialog.ShowDialog(this);
+            }
+        }
+
+        #endregion
 
         #region PTT (Push to Talk)
 
@@ -709,8 +889,238 @@ namespace HTCommander.Desktop
 
         #endregion
 
+        #region WAV File Transmit
+
+        private string mainSelectedWavPath;
+        private bool mainIsTransmittingWav = false;
+
+        private async void MainSelectWav_Click(object sender, RoutedEventArgs e)
+        {
+            var picker = Program.PlatformServices?.FilePicker;
+            if (picker == null) return;
+
+            string path = await picker.PickFileAsync("Select Audio File",
+                new[] { "WAV Files|*.wav", "All Files|*.*" });
+            if (path == null) return;
+
+            mainSelectedWavPath = path;
+            MainSelectWavButton.Content = Path.GetFileName(path);
+            MainTransmitWavButton.IsEnabled = true;
+            MainWavStatus.Text = "";
+        }
+
+        private void MainTransmitWav_Click(object sender, RoutedEventArgs e)
+        {
+            if (mainIsTransmittingWav || string.IsNullOrEmpty(mainSelectedWavPath) || activeDeviceId < 0) return;
+
+            mainIsTransmittingWav = true;
+            MainTransmitWavButton.IsEnabled = false;
+            MainSelectWavButton.IsEnabled = false;
+            MainWavStatus.Text = "Reading file...";
+
+            string path = mainSelectedWavPath;
+            float gain = broker.GetValue<int>(activeDeviceId, "MicGain", 100) / 100f;
+            int devId = activeDeviceId;
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    var (samples, wavParams) = WavFile.Read(path);
+
+                    // Convert stereo to mono if needed
+                    if (wavParams.NumChannels > 1)
+                    {
+                        int monoLen = samples.Length / wavParams.NumChannels;
+                        short[] mono = new short[monoLen];
+                        for (int i = 0; i < monoLen; i++)
+                        {
+                            int sum = 0;
+                            for (int ch = 0; ch < wavParams.NumChannels; ch++)
+                                sum += samples[i * wavParams.NumChannels + ch];
+                            mono[i] = (short)(sum / wavParams.NumChannels);
+                        }
+                        samples = mono;
+                    }
+
+                    // Convert to byte array
+                    byte[] pcmBytes = new byte[samples.Length * 2];
+                    for (int i = 0; i < samples.Length; i++)
+                    {
+                        pcmBytes[i * 2] = (byte)(samples[i] & 0xFF);
+                        pcmBytes[i * 2 + 1] = (byte)((samples[i] >> 8) & 0xFF);
+                    }
+
+                    // Resample to 32kHz if needed
+                    if (wavParams.SampleRate != 32000)
+                        pcmBytes = ResampleTo32kHz(pcmBytes, pcmBytes.Length, wavParams.SampleRate);
+
+                    if (pcmBytes == null || pcmBytes.Length == 0)
+                    {
+                        Dispatcher.UIThread.Post(() => MainWavStatus.Text = "Error: resample failed");
+                        return;
+                    }
+
+                    ApplyGain(pcmBytes, gain);
+
+                    int chunkSize = 6400; // 100ms at 32kHz 16-bit mono
+                    int totalChunks = (pcmBytes.Length + chunkSize - 1) / chunkSize;
+
+                    for (int c = 0; c < totalChunks; c++)
+                    {
+                        if (!mainIsTransmittingWav) break;
+
+                        int offset = c * chunkSize;
+                        int len = Math.Min(chunkSize, pcmBytes.Length - offset);
+                        byte[] chunk = new byte[len];
+                        Array.Copy(pcmBytes, offset, chunk, 0, len);
+
+                        DataBroker.Dispatch(devId, "TransmitVoicePCM", new { Data = chunk, PlayLocally = false }, store: false);
+
+                        int pct = (c + 1) * 100 / totalChunks;
+                        Dispatcher.UIThread.Post(() => MainWavStatus.Text = $"Transmitting... {pct}%");
+
+                        Thread.Sleep(100);
+                    }
+
+                    Dispatcher.UIThread.Post(() => MainWavStatus.Text = mainIsTransmittingWav ? "Done" : "Cancelled");
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.UIThread.Post(() => MainWavStatus.Text = $"Error: {ex.Message}");
+                }
+                finally
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        mainIsTransmittingWav = false;
+                        MainTransmitWavButton.IsEnabled = !string.IsNullOrEmpty(mainSelectedWavPath);
+                        MainSelectWavButton.IsEnabled = true;
+                    });
+                }
+            });
+        }
+
+        private static void ApplyGain(byte[] pcm16, float gain)
+        {
+            if (gain == 1.0f) return;
+            int samples = pcm16.Length / 2;
+            for (int i = 0; i < samples; i++)
+            {
+                int offset = i * 2;
+                short s = (short)(pcm16[offset] | (pcm16[offset + 1] << 8));
+                int amplified = (int)(s * gain);
+                if (amplified > 32767) amplified = 32767;
+                else if (amplified < -32768) amplified = -32768;
+                pcm16[offset] = (byte)(amplified & 0xFF);
+                pcm16[offset + 1] = (byte)((amplified >> 8) & 0xFF);
+            }
+        }
+
+        #endregion
+
+        #region Channel Drag & Drop
+
+        private Avalonia.Point? channelDragStartPoint;
+        private bool channelDragInProgress = false;
+
+        protected override void OnLoaded(RoutedEventArgs e)
+        {
+            base.OnLoaded(e);
+            ChannelList.AddHandler(InputElement.PointerPressedEvent, OnChannelPointerPressed, RoutingStrategies.Tunnel);
+            ChannelList.AddHandler(InputElement.PointerMovedEvent, OnChannelPointerMoved, RoutingStrategies.Tunnel);
+            ChannelList.AddHandler(DragDrop.DropEvent, OnChannelDrop);
+            ChannelList.AddHandler(DragDrop.DragOverEvent, OnChannelDragOver);
+        }
+
+        private void OnChannelPointerPressed(object sender, PointerPressedEventArgs e)
+        {
+            channelDragStartPoint = e.GetPosition(ChannelList);
+            channelDragInProgress = false;
+        }
+
+        private async void OnChannelPointerMoved(object sender, PointerEventArgs e)
+        {
+            if (channelDragStartPoint == null || channelDragInProgress) return;
+            if (!e.GetCurrentPoint(ChannelList).Properties.IsLeftButtonPressed)
+            {
+                channelDragStartPoint = null;
+                return;
+            }
+
+            var pos = e.GetPosition(ChannelList);
+            var diff = pos - channelDragStartPoint.Value;
+            if (Math.Abs(diff.X) < 8 && Math.Abs(diff.Y) < 8) return;
+
+            if (ChannelList.SelectedItem is not ChannelDisplayItem sourceItem) return;
+
+            channelDragInProgress = true;
+            var dataObject = new DataObject();
+            dataObject.Set("ChannelDisplayItem", sourceItem);
+            await DragDrop.DoDragDrop(e, dataObject, DragDropEffects.Copy);
+            channelDragStartPoint = null;
+            channelDragInProgress = false;
+        }
+
+        private void OnChannelDragOver(object sender, DragEventArgs e)
+        {
+            e.DragEffects = DragDropEffects.None;
+            if (!e.Data.Contains("ChannelDisplayItem")) return;
+
+            // Find target item from position
+            var target = GetChannelItemAtPosition(e);
+            var source = e.Data.Get("ChannelDisplayItem") as ChannelDisplayItem;
+            if (target != null && source != null && target.ChannelIndex != source.ChannelIndex)
+                e.DragEffects = DragDropEffects.Copy;
+        }
+
+        private async void OnChannelDrop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.Contains("ChannelDisplayItem")) return;
+            var source = e.Data.Get("ChannelDisplayItem") as ChannelDisplayItem;
+            var target = GetChannelItemAtPosition(e);
+            if (source == null || target == null || source.ChannelIndex == target.ChannelIndex) return;
+            if (activeDeviceId < 0 || currentChannels == null) return;
+
+            var sourceChannel = currentChannels[source.ChannelIndex];
+            if (sourceChannel == null) return;
+
+            // Show confirmation
+            var dialog = new MessageDialog($"Copy \"{source.Name}\" to channel slot {target.ChannelIndex + 1}?", "Copy Channel");
+            await dialog.ShowDialog(this);
+            if (!dialog.Confirmed) return;
+
+            // Create a copy with the target channel_id
+            var copy = new RadioChannelInfo(sourceChannel);
+            copy.channel_id = target.ChannelIndex;
+            broker.Dispatch(activeDeviceId, "WriteChannel", copy, store: false);
+        }
+
+        private ChannelDisplayItem GetChannelItemAtPosition(DragEventArgs e)
+        {
+            var pos = e.GetPosition(ChannelList);
+            // Walk through items to find which one we're over
+            if (ChannelList.ItemsSource is List<ChannelDisplayItem> items)
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var container = ChannelList.ContainerFromIndex(i);
+                    if (container == null) continue;
+                    var bounds = container.Bounds;
+                    if (pos.Y >= bounds.Top && pos.Y <= bounds.Bottom)
+                        return items[i];
+                }
+            }
+            return null;
+        }
+
+        #endregion
+
         protected override void OnClosed(EventArgs e)
         {
+            // Cancel WAV transmit
+            mainIsTransmittingWav = false;
+
             // Clean up mic
             if (mainMicInput != null)
             {

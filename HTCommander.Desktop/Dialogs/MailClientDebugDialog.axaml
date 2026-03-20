@@ -13,7 +13,7 @@
 
         <TextBox Name="LogBox" IsReadOnly="True"
                  FontFamily="Consolas,Menlo,monospace"
-                 Background="#1E1E1E" Foreground="#D4D4D4"
+                 Background="{DynamicResource TextAreaBackground}" Foreground="{DynamicResource TextAreaForeground}"
                  AcceptsReturn="True" TextWrapping="Wrap" />
     </DockPanel>
 </Window>

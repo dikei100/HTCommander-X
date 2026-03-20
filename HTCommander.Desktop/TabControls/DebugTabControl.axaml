@@ -3,7 +3,7 @@
              x:Class="HTCommander.Desktop.TabControls.DebugTabControl">
     <DockPanel>
         <!-- Header panel -->
-        <Border DockPanel.Dock="Top" Background="#2D2D30" Height="46" Padding="10,0">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource TabHeaderBackground}" Height="46" Padding="10,0">
             <Grid>
                 <TextBlock Text="Developer Debug" VerticalAlignment="Center"
                            FontSize="14" FontWeight="SemiBold" />
@@ -25,6 +25,6 @@
         <!-- Log output -->
         <TextBox Name="DebugLog" IsReadOnly="True" AcceptsReturn="True"
                  TextWrapping="NoWrap" FontFamily="Consolas,Courier New,monospace"
-                 FontSize="12" Background="#1E1E1E" Foreground="#D4D4D4" />
+                 FontSize="12" Background="{DynamicResource TextAreaBackground}" Foreground="{DynamicResource TextAreaForeground}" />
     </DockPanel>
 </UserControl>

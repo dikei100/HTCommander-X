@@ -2,15 +2,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="HTCommander.Desktop.TabControls.VoiceTabControl">
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#2D2D30" Height="46" Padding="10,0">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource TabHeaderBackground}" Height="46" Padding="10,0">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-                    <TextBlock Text="Voice" FontSize="14" FontWeight="SemiBold" />
+                    <TextBlock Text="Communication" FontSize="14" FontWeight="SemiBold" />
                     <TextBlock Name="VoiceStatus" Text="Idle" VerticalAlignment="Center"
                                Foreground="#888" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                             VerticalAlignment="Center" Spacing="4">
+                    <Button Name="SendSstvButton" Content="Send SSTV" Click="SendSstv_Click"
+                            Padding="8,2" IsEnabled="False" />
                     <ComboBox Name="ModeCombo" Width="100" SelectedIndex="0">
                         <ComboBoxItem Content="Chat" />
                         <ComboBoxItem Content="Speak" />
@@ -19,6 +21,21 @@
                     </ComboBox>
                 </StackPanel>
             </Grid>
+        </Border>
+
+        <!-- SSTV decode panel (collapsible) -->
+        <Border Name="SstvDecodePanel" DockPanel.Dock="Top" Background="{DynamicResource TabHeaderBackground}"
+                Padding="8" IsVisible="False">
+            <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="SSTV Decoding:" FontWeight="SemiBold" FontSize="12" />
+                    <TextBlock Name="SstvModeText" Text="" Foreground="#888" FontSize="12" />
+                </StackPanel>
+                <ProgressBar Name="SstvProgressBar" Minimum="0" Maximum="100" Value="0" Height="8" />
+                <Border Background="{DynamicResource SstvPreviewBackground}" Height="180" CornerRadius="4">
+                    <Image Name="SstvPreviewImage" Stretch="Uniform" />
+                </Border>
+            </StackPanel>
         </Border>
 
         <!-- Input area at bottom -->

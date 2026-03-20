@@ -5,6 +5,7 @@ using System.Net.Http;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace HTCommander.Desktop.Dialogs
 {
@@ -20,17 +21,32 @@ namespace HTCommander.Desktop.Dialogs
         private ObservableCollection<AprsRouteItem> aprsRoutes = new ObservableCollection<AprsRouteItem>();
         private string _originalGpsPort;
         private int _originalGpsBaud;
+        private bool isLoading = true;
+        private int activeDeviceId = -1;
 
         public SettingsDialog()
         {
             InitializeComponent();
             broker = new DataBrokerClient();
             LoadSettings();
+            isLoading = false;
         }
 
         private void LoadSettings()
         {
-            // License / General
+            // Theme
+            string theme = DataBroker.GetValue<string>(0, "Theme", "Dark");
+            for (int i = 0; i < ThemeCombo.Items.Count; i++)
+            {
+                if (ThemeCombo.Items[i] is ComboBoxItem ti && ti.Tag?.ToString() == theme)
+                {
+                    ThemeCombo.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (ThemeCombo.SelectedIndex < 0) ThemeCombo.SelectedIndex = 2; // Dark default
+
+            // General
             CallSignBox.Text = DataBroker.GetValue<string>(0, "CallSign", "");
             for (int i = 0; i <= 15; i++) StationIdCombo.Items.Add(i.ToString());
             int stationId = DataBroker.GetValue<int>(0, "StationId", 0);
@@ -101,7 +117,6 @@ namespace HTCommander.Desktop.Dialogs
             }
             if (GpsPortCombo.SelectedIndex < 0) GpsPortCombo.SelectedIndex = 0;
 
-            // Select matching baud rate
             string baudStr = _originalGpsBaud.ToString();
             for (int i = 0; i < GpsBaudCombo.Items.Count; i++)
             {
@@ -111,6 +126,18 @@ namespace HTCommander.Desktop.Dialogs
                 }
             }
             if (GpsBaudCombo.SelectedIndex < 0) GpsBaudCombo.SelectedIndex = 0;
+
+            // Modem mode
+            string modemMode = DataBroker.GetValue<string>(0, "SoftwareModemMode", "None");
+            for (int i = 0; i < ModemModeCombo.Items.Count; i++)
+            {
+                if (ModemModeCombo.Items[i] is ComboBoxItem mItem && mItem.Tag?.ToString() == modemMode)
+                {
+                    ModemModeCombo.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (ModemModeCombo.SelectedIndex < 0) ModemModeCombo.SelectedIndex = 0;
 
             // Audio devices
             var audio = Program.PlatformServices?.Audio;
@@ -130,16 +157,86 @@ namespace HTCommander.Desktop.Dialogs
                     if (InputDeviceCombo.Items[i]?.ToString() == savedInput) { InputDeviceCombo.SelectedIndex = i; break; }
                 }
             }
+
+            // Audio controls — find active radio
+            var radios = broker.GetValue<object>(1, "ConnectedRadios", null);
+            if (radios is System.Collections.IEnumerable enumerable)
+            {
+                foreach (var r in enumerable)
+                {
+                    if (r == null) continue;
+                    var prop = r.GetType().GetProperty("DeviceId");
+                    if (prop != null)
+                    {
+                        object val = prop.GetValue(r);
+                        if (val is int id && id > 0) { activeDeviceId = id; break; }
+                    }
+                }
+            }
+
+            if (activeDeviceId >= 0)
+            {
+                AudioControlsNote.IsVisible = false;
+
+                // Subscribe to live updates
+                broker.Subscribe(activeDeviceId, "Volume", OnVolumeLevelChanged);
+                broker.Subscribe(activeDeviceId, "Settings", OnRadioSettingsChanged);
+
+                // Volume from radio
+                int volume = DataBroker.GetValue<int>(activeDeviceId, "Volume", 0);
+                VolumeSlider.Value = volume;
+                VolumeValueText.Text = volume.ToString();
+
+                // Squelch from settings
+                var settings = DataBroker.GetValue<RadioSettings>(activeDeviceId, "Settings", null);
+                if (settings != null)
+                {
+                    SquelchSlider.Value = settings.squelch_level;
+                    SquelchValueText.Text = settings.squelch_level.ToString();
+                }
+
+                // Software output volume
+                int outputVol = broker.GetValue<int>(activeDeviceId, "OutputAudioVolume", 100);
+                OutputVolumeSlider.Value = outputVol;
+                OutputVolumeText.Text = $"{outputVol}%";
+
+                // Mic gain
+                int micGainPct = broker.GetValue<int>(activeDeviceId, "MicGain", 100);
+                MicGainSlider.Value = micGainPct;
+                MicGainText.Text = $"{micGainPct}%";
+
+                // Mute
+                bool muted = broker.GetValue<bool>(activeDeviceId, "Muted", false);
+                MuteCheck.IsChecked = muted;
+
+                // Request current volume
+                DataBroker.Dispatch(activeDeviceId, "GetVolume", null, store: false);
+            }
+            else
+            {
+                AudioControlsNote.IsVisible = true;
+                VolumeSlider.IsEnabled = false;
+                SquelchSlider.IsEnabled = false;
+                OutputVolumeSlider.IsEnabled = false;
+                MicGainSlider.IsEnabled = false;
+                MuteCheck.IsEnabled = false;
+            }
         }
 
         private void SaveSettings()
         {
+            // Theme
+            string themeTag = "Dark";
+            if (ThemeCombo.SelectedItem is ComboBoxItem tci) themeTag = tci.Tag?.ToString() ?? "Dark";
+            DataBroker.Dispatch(0, "Theme", themeTag);
+            App.SetTheme(themeTag);
+
             DataBroker.Dispatch(0, "CallSign", CallSignBox.Text?.ToUpper() ?? "");
             DataBroker.Dispatch(0, "StationId", StationIdCombo.SelectedIndex);
             DataBroker.Dispatch(0, "AllowTransmit", AllowTransmitCheck.IsChecked == true ? 1 : 0);
             DataBroker.Dispatch(0, "CheckForUpdates", CheckUpdatesCheck.IsChecked == true);
 
-            // APRS routes → pipe-delimited string
+            // APRS routes
             var parts = new List<string>();
             foreach (var r in aprsRoutes) parts.Add($"{r.Name},{r.Route}");
             DataBroker.Dispatch(0, "AprsRoutes", string.Join("|", parts));
@@ -166,10 +263,88 @@ namespace HTCommander.Desktop.Dialogs
             if (GpsBaudCombo.SelectedItem is ComboBoxItem bi) int.TryParse(bi.Content?.ToString(), out baud);
             DataBroker.Dispatch(0, "GpsBaudRate", baud);
 
-            // Audio
+            // Audio devices
             DataBroker.Dispatch(0, "AudioOutputDevice", OutputDeviceCombo.SelectedItem?.ToString() ?? "");
             DataBroker.Dispatch(0, "AudioInputDevice", InputDeviceCombo.SelectedItem?.ToString() ?? "");
+
+            // Modem mode
+            string modemTag = "None";
+            if (ModemModeCombo.SelectedItem is ComboBoxItem mci) modemTag = mci.Tag?.ToString() ?? "None";
+            DataBroker.Dispatch(0, "SetSoftwareModemMode", modemTag);
         }
+
+        #region Audio Control Handlers
+
+        private void OnVolumeLevelChanged(int devId, string name, object data)
+        {
+            int volume = 0;
+            if (data is int i) volume = i;
+            else if (data is byte b) volume = b;
+            else return;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                isLoading = true;
+                VolumeSlider.Value = Math.Clamp(volume, 0, 15);
+                VolumeValueText.Text = volume.ToString();
+                isLoading = false;
+            });
+        }
+
+        private void OnRadioSettingsChanged(int devId, string name, object data)
+        {
+            if (data is RadioSettings settings)
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    isLoading = true;
+                    SquelchSlider.Value = settings.squelch_level;
+                    SquelchValueText.Text = settings.squelch_level.ToString();
+                    isLoading = false;
+                });
+            }
+        }
+
+        private void VolumeSlider_Changed(object sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            if (isLoading || activeDeviceId < 0) return;
+            int level = (int)VolumeSlider.Value;
+            VolumeValueText.Text = level.ToString();
+            DataBroker.Dispatch(activeDeviceId, "SetVolumeLevel", level, store: false);
+        }
+
+        private void SquelchSlider_Changed(object sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            if (isLoading || activeDeviceId < 0) return;
+            int level = (int)SquelchSlider.Value;
+            SquelchValueText.Text = level.ToString();
+            DataBroker.Dispatch(activeDeviceId, "SetSquelchLevel", level, store: false);
+        }
+
+        private void OutputVolumeSlider_Changed(object sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            if (isLoading || activeDeviceId < 0) return;
+            int vol = (int)OutputVolumeSlider.Value;
+            OutputVolumeText.Text = $"{vol}%";
+            DataBroker.Dispatch(activeDeviceId, "SetOutputVolume", vol, store: false);
+            broker.Dispatch(activeDeviceId, "OutputAudioVolume", vol);
+        }
+
+        private void MicGainSlider_Changed(object sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            if (isLoading || activeDeviceId < 0) return;
+            int pct = (int)MicGainSlider.Value;
+            MicGainText.Text = $"{pct}%";
+            broker.Dispatch(activeDeviceId, "MicGain", pct);
+        }
+
+        private void Mute_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0) return;
+            DataBroker.Dispatch(activeDeviceId, "SetMute", MuteCheck.IsChecked == true, store: false);
+        }
+
+        #endregion
 
         private void UpdateTransmitState()
         {
@@ -211,7 +386,6 @@ namespace HTCommander.Desktop.Dialogs
             {
                 item.Name = dialog.RouteName;
                 item.Route = dialog.RouteValue;
-                // Refresh grid
                 var items = new ObservableCollection<AprsRouteItem>(aprsRoutes);
                 aprsRoutes = items;
                 AprsRoutesGrid.ItemsSource = aprsRoutes;
@@ -259,9 +433,43 @@ namespace HTCommander.Desktop.Dialogs
             }
         }
 
+        private async void ResetDefaults_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new MessageDialog(
+                "This will reset all settings to their defaults. The application will close.\n\nAre you sure?",
+                "Reset Settings");
+            await dialog.ShowDialog(this);
+            if (!dialog.Confirmed) return;
+
+            // Clear all device 0 settings
+            DataBroker.ClearDevice(0);
+
+            // Also try to delete the config file on Linux
+            try
+            {
+                string configPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "HTCommander", "settings.json");
+                if (System.IO.File.Exists(configPath))
+                    System.IO.File.Delete(configPath);
+
+                // Also try ~/.config/HTCommander/settings.json
+                string configDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string linuxPath = System.IO.Path.Combine(configDir, ".config", "HTCommander", "settings.json");
+                if (System.IO.File.Exists(linuxPath))
+                    System.IO.File.Delete(linuxPath);
+            }
+            catch { }
+
+            // Close the application
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime lifetime)
+            {
+                lifetime.Shutdown(0);
+            }
+        }
+
         private bool ValidateSettings()
         {
-            // Check port conflict
             if (WebServerCheck.IsChecked == true && AgwpeServerCheck.IsChecked == true &&
                 (int)(WebPortUpDown.Value ?? 0) == (int)(AgwpePortUpDown.Value ?? 0))
             {
@@ -281,7 +489,6 @@ namespace HTCommander.Desktop.Dialogs
 
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
-            // Restore original GPS settings (they may have been applied immediately)
             DataBroker.Dispatch(0, "GpsSerialPort", _originalGpsPort);
             DataBroker.Dispatch(0, "GpsBaudRate", _originalGpsBaud);
             Close();

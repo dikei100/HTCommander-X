@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="HTCommander.Desktop.TabControls.MailTabControl">
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#2D2D30" Height="46" Padding="10,0">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource TabHeaderBackground}" Height="46" Padding="10,0">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
                     <TextBlock Text="Mail" FontSize="14" FontWeight="SemiBold" />
@@ -27,7 +27,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Mailbox tree -->
-            <TreeView Name="MailboxTree" Grid.Column="0" Background="#252526"
+            <TreeView Name="MailboxTree" Grid.Column="0" Background="{DynamicResource InfoCardBackground}"
                       SelectionChanged="MailboxTree_SelectionChanged">
                 <TreeViewItem Header="Inbox" Tag="Inbox" IsExpanded="True" />
                 <TreeViewItem Header="Outbox" Tag="Outbox" />
@@ -37,7 +37,7 @@
                 <TreeViewItem Header="Trash" Tag="Trash" />
             </TreeView>
 
-            <GridSplitter Grid.Column="1" Width="5" Background="#444" />
+            <GridSplitter Grid.Column="1" Width="5" Background="{DynamicResource SplitterColor}" />
 
             <!-- Mail content -->
             <Grid Grid.Column="2">
@@ -56,11 +56,11 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="#444" />
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="{DynamicResource SplitterColor}" />
 
                 <TextBox Name="MailPreview" Grid.Row="2" IsReadOnly="True"
                          AcceptsReturn="True" TextWrapping="Wrap"
-                         Background="#1E1E1E" Foreground="#D4D4D4" />
+                         Background="{DynamicResource TextAreaBackground}" Foreground="{DynamicResource TextAreaForeground}" />
             </Grid>
         </Grid>
     </DockPanel>

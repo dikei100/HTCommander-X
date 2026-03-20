@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="HTCommander.Desktop.Dialogs.SettingsDialog"
         Title="Settings"
-        Width="620" Height="520"
+        Width="620" Height="580"
         WindowStartupLocation="CenterOwner"
         CanResize="False">
     <DockPanel Margin="12">
@@ -14,11 +14,19 @@
         </StackPanel>
 
         <TabControl>
-            <!-- License / General tab -->
-            <TabItem Header="License">
+            <!-- General tab (was License) -->
+            <TabItem Header="General">
                 <StackPanel Spacing="12" Margin="12">
                     <TextBlock Text="An Amateur radio license is required to transmit."
                                Foreground="#888" FontSize="12" TextWrapping="Wrap" />
+                    <Grid ColumnDefinitions="110,*" Margin="0,0,0,0">
+                        <TextBlock Grid.Column="0" Text="Theme:" VerticalAlignment="Center" />
+                        <ComboBox Name="ThemeCombo" Grid.Column="1" Width="160" HorizontalAlignment="Left">
+                            <ComboBoxItem Content="Auto (System)" Tag="Auto" />
+                            <ComboBoxItem Content="Light" Tag="Light" />
+                            <ComboBoxItem Content="Dark" Tag="Dark" />
+                        </ComboBox>
+                    </Grid>
                     <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto" Margin="0,8,0,0">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Call Sign:" VerticalAlignment="Center" />
                         <TextBox Name="CallSignBox" Grid.Row="0" Grid.Column="1" Width="140"
@@ -32,6 +40,9 @@
                     <TextBlock Name="TransmitWarning" Text="Enter a valid call sign (3+ characters) to enable transmit."
                                Foreground="#F44336" FontSize="11" Margin="24,0,0,0" />
                     <CheckBox Name="CheckUpdatesCheck" Content="Check for updates on startup" Margin="0,4,0,0" />
+                    <Button Name="ResetDefaultsButton" Content="Reset All Settings to Defaults"
+                            Click="ResetDefaults_Click" Padding="12,6" Margin="0,12,0,0"
+                            HorizontalAlignment="Left" />
                 </StackPanel>
             </TabItem>
 
@@ -136,8 +147,9 @@
                 </StackPanel>
             </TabItem>
 
-            <!-- Audio tab -->
+            <!-- Audio tab (now includes controls from RadioAudioDialog) -->
             <TabItem Header="Audio">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="12" Margin="12">
                     <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Output Device:" VerticalAlignment="Center" />
@@ -145,6 +157,75 @@
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Input Device:" VerticalAlignment="Center" Margin="0,8,0,0" />
                         <ComboBox Name="InputDeviceCombo" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,8,0,0" />
                     </Grid>
+
+                    <!-- Radio Volume (hardware 0-15) -->
+                    <StackPanel Spacing="4" Margin="0,8,0,0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Radio Volume" FontWeight="SemiBold" />
+                            <TextBlock Name="VolumeValueText" Grid.Column="1" Text="0" Foreground="{DynamicResource SecondaryText}" />
+                        </Grid>
+                        <Slider Name="VolumeSlider" Minimum="0" Maximum="15"
+                                TickFrequency="1" IsSnapToTickEnabled="True"
+                                ValueChanged="VolumeSlider_Changed" />
+                    </StackPanel>
+
+                    <!-- Squelch (0-9) -->
+                    <StackPanel Spacing="4">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Squelch Level" FontWeight="SemiBold" />
+                            <TextBlock Name="SquelchValueText" Grid.Column="1" Text="0" Foreground="{DynamicResource SecondaryText}" />
+                        </Grid>
+                        <Slider Name="SquelchSlider" Minimum="0" Maximum="9"
+                                TickFrequency="1" IsSnapToTickEnabled="True"
+                                ValueChanged="SquelchSlider_Changed" />
+                    </StackPanel>
+
+                    <!-- Software Output Volume (0-100) -->
+                    <StackPanel Spacing="4">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Output Volume" FontWeight="SemiBold" />
+                            <TextBlock Name="OutputVolumeText" Grid.Column="1" Text="100%" Foreground="{DynamicResource SecondaryText}" />
+                        </Grid>
+                        <Slider Name="OutputVolumeSlider" Minimum="0" Maximum="100"
+                                TickFrequency="1" IsSnapToTickEnabled="True"
+                                ValueChanged="OutputVolumeSlider_Changed" />
+                        <CheckBox Name="MuteCheck" Content="Mute" Click="Mute_Click" />
+                    </StackPanel>
+
+                    <!-- Mic Gain -->
+                    <StackPanel Spacing="4">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="Mic Gain" FontWeight="SemiBold" />
+                            <TextBlock Name="MicGainText" Grid.Column="1" Text="100%" Foreground="{DynamicResource SecondaryText}" />
+                        </Grid>
+                        <Slider Name="MicGainSlider" Minimum="0" Maximum="200"
+                                TickFrequency="1" IsSnapToTickEnabled="True"
+                                Value="100"
+                                ValueChanged="MicGainSlider_Changed" />
+                        <TextBlock Text="0% = mute, 100% = normal, 200% = 2x boost" Foreground="{DynamicResource TertiaryText}" FontSize="10" />
+                    </StackPanel>
+
+                    <TextBlock Name="AudioControlsNote" Text="Connect a radio to adjust volume and squelch."
+                               Foreground="{DynamicResource SecondaryText}" FontSize="11" FontStyle="Italic" />
+                </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Modem tab -->
+            <TabItem Header="Modem">
+                <StackPanel Spacing="12" Margin="12">
+                    <Grid ColumnDefinitions="110,*">
+                        <TextBlock Grid.Column="0" Text="Modem Mode:" VerticalAlignment="Center" />
+                        <ComboBox Name="ModemModeCombo" Grid.Column="1" Width="180" HorizontalAlignment="Left">
+                            <ComboBoxItem Content="None" Tag="None" />
+                            <ComboBoxItem Content="AFSK 1200" Tag="AFSK1200" />
+                            <ComboBoxItem Content="PSK 2400" Tag="PSK2400" />
+                            <ComboBoxItem Content="PSK 4800" Tag="PSK4800" />
+                            <ComboBoxItem Content="G3RUH 9600" Tag="G3RUH9600" />
+                        </ComboBox>
+                    </Grid>
+                    <TextBlock Text="The software modem decodes digital signals from the radio audio stream. Enable audio streaming (Radio menu) for the modem to function."
+                               Foreground="{DynamicResource SecondaryText}" FontSize="11" TextWrapping="Wrap" />
                 </StackPanel>
             </TabItem>
         </TabControl>

@@ -166,6 +166,14 @@ namespace HTCommander
             buf[9] = (byte)((cha & 0xF0) | ((chb & 0xF0) >> 4));
             return buf;
         }
+
+        public byte[] ToByteArray(int cha, int chb, int xdouble_channel, bool xscan, int xsquelch, int xvfo_x)
+        {
+            byte[] buf = ToByteArray(cha, chb, xdouble_channel, xscan, xsquelch);
+            // Byte 13 of raw = buf[8]: screen_timeout(7:3) | vfo_x(2:1) | imperial_unit(0)
+            buf[8] = (byte)((buf[8] & 0xF9) | ((xvfo_x & 0x03) << 1));
+            return buf;
+        }
     }
 
 }
