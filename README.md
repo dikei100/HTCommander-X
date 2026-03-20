@@ -5,8 +5,6 @@
 
 ![HTCommander-X screenshot](docs/images/htcommander-x.png)
 
-An Amateur radio license is required to transmit using this software. You can get [information on a license here](https://www.arrl.org/getting-licensed).
-
 ### What's New in HTCommander-X
 
 - **Cross-platform** — runs on Linux and Windows
@@ -55,8 +53,6 @@ htcommander
 
 **Windows:**
 Extract `HTCommander-X-win-x64.zip` and run `HTCommander.Desktop.exe`.
-
-Pair your radio to your computer via Bluetooth before launching. If your computer does not have Bluetooth, you can use an inexpensive Bluetooth USB dongle (make sure Bluetooth LE is supported). Pairing can be tricky — you have to pair TWO Bluetooth devices in quick succession. See the [Bluetooth pairing instructions](https://github.com/dikei100/HTCommander-X/blob/main/docs/Paring.md).
 
 ### Acknowledgements
 
