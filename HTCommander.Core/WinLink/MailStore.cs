@@ -126,9 +126,9 @@ namespace HTCommander
                     NotifyMailsChanged();
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Ignore errors - mail might already exist
+                System.Diagnostics.Debug.WriteLine($"MailStore.OnMailAdd: {ex.Message}");
             }
         }
 
@@ -145,9 +145,9 @@ namespace HTCommander
                 UpdateMail(mail);
                 NotifyMailsChanged();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Ignore errors
+                System.Diagnostics.Debug.WriteLine($"MailStore.OnMailUpdate: {ex.Message}");
             }
         }
 
@@ -166,9 +166,9 @@ namespace HTCommander
                 DeleteMail(mid);
                 NotifyMailsChanged();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Ignore errors
+                System.Diagnostics.Debug.WriteLine($"MailStore.OnMailDelete: {ex.Message}");
             }
         }
 
@@ -197,9 +197,9 @@ namespace HTCommander
                     NotifyMailsChanged();
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Ignore errors
+                System.Diagnostics.Debug.WriteLine($"MailStore.OnMailMove: {ex.Message}");
             }
         }
 
@@ -215,9 +215,9 @@ namespace HTCommander
                 List<WinLinkMail> mails = GetAllMails();
                 _broker.Dispatch(0, "MailList", mails, store: false);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Dispatch empty list on error
+                System.Diagnostics.Debug.WriteLine($"MailStore.OnMailGetAll: {ex.Message}");
                 _broker.Dispatch(0, "MailList", new List<WinLinkMail>(), store: false);
             }
         }
@@ -241,8 +241,9 @@ namespace HTCommander
                 WinLinkMail mail = GetMail(mid);
                 _broker.Dispatch(0, "Mail", mail, store: false);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"MailStore.OnMailGet: {ex.Message}");
                 _broker.Dispatch(0, "Mail", null, store: false);
             }
         }
@@ -263,8 +264,9 @@ namespace HTCommander
                 {
                     exists = MailExists(mid);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine($"MailStore.OnMailExists: {ex.Message}");
                     exists = false;
                 }
             }
@@ -492,9 +494,9 @@ namespace HTCommander
                     MailsChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore errors during signal file processing
+                System.Diagnostics.Debug.WriteLine($"MailStore.OnSignalFileChanged: {ex.Message}");
             }
         }
 
@@ -506,9 +508,9 @@ namespace HTCommander
                 File.WriteAllText(_signalFilePath, DateTime.UtcNow.Ticks.ToString());
                 _lastSignalTime = DateTime.Now;
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore errors when updating signal file
+                System.Diagnostics.Debug.WriteLine($"MailStore.NotifyChange: {ex.Message}");
             }
         }
 
@@ -854,7 +856,7 @@ namespace HTCommander
                         string fullPath = Path.Combine(_attachmentsPath, relativePath);
                         if (File.Exists(fullPath))
                         {
-                            try { File.Delete(fullPath); } catch { }
+                            try { File.Delete(fullPath); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"MailStore.DeleteAttachmentFiles: {ex.Message}"); }
                         }
                     }
                 }

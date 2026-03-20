@@ -139,7 +139,7 @@ namespace HTCommander
             byte[] obuf = null;
             int expectedLength = (payload[2] + (payload[3] << 8) + (payload[4] << 16) + (payload[5] << 24));
             int obuflen = -1;
-            try { obuflen = WinlinkCompression.Decode(payload, ref obuf, true, expectedLength); } catch (Exception) { }
+            try { obuflen = WinlinkCompression.Decode(payload, ref obuf, true, expectedLength); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"WinLinkMail.DecodeBlocksToEmail: {ex.Message}"); }
             if (obuflen != expectedLength) { fail = true; return null; }
 
             // Decode the mail

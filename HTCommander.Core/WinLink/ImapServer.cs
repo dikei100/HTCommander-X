@@ -17,7 +17,7 @@ namespace HTCommander
 {
     public class ImapServer
     {
-        // TODO: MainForm dependency removed for cross-platform. Callback functionality to be wired via DataBroker.
+        private DataBrokerClient broker;
         private TcpListener listener;
         private Thread listenerThread;
         private bool running;
@@ -27,6 +27,7 @@ namespace HTCommander
         public ImapServer(int port)
         {
             this.Port = port;
+            this.broker = new DataBrokerClient();
         }
 
         public void Start()
@@ -39,7 +40,7 @@ namespace HTCommander
                 listenerThread = new Thread(ListenerLoop);
                 listenerThread.IsBackground = true;
                 listenerThread.Start();
-                //mainForm.Debug($"IMAP server started on port {Port}");
+                broker.LogInfo($"IMAP server started on port {Port}");
             }
             catch (Exception)
             {
@@ -61,7 +62,7 @@ namespace HTCommander
                 }
                 sessions.Clear();
             }
-            //mainForm.Debug("IMAP server stopped");
+            broker.LogInfo("IMAP server stopped");
         }
 
         private void ListenerLoop()
@@ -71,7 +72,7 @@ namespace HTCommander
                 try
                 {
                     TcpClient client = listener.AcceptTcpClient();
-                    ImapSession session = new ImapSession(this, client);
+                    ImapSession session = new ImapSession(this, client, broker);
                     lock (sessions)
                     {
                         sessions.Add(session);
@@ -99,14 +100,11 @@ namespace HTCommander
     public class ImapSession
     {
         private ImapServer server;
-        // TODO: MainForm dependency removed for cross-platform. Callback functionality to be wired via DataBroker.
+        private DataBrokerClient broker;
         private TcpClient client;
         private StreamReader reader;
         private StreamWriter writer;
-#pragma warning disable CS0649 // Field is never assigned to (login code is commented out)
         private bool authenticated;
-#pragma warning restore CS0649
-        // private string username; // Reserved for future use
         private int selectedMailbox = -1;
         private Dictionary<int, uint> messageUids = new Dictionary<int, uint>();
         private Dictionary<int, HashSet<string>> messageFlags = new Dictionary<int, HashSet<string>>();
@@ -133,10 +131,11 @@ namespace HTCommander
             { 5, "Trash" }
         };
 
-        public ImapSession(ImapServer server, TcpClient client)
+        public ImapSession(ImapServer server, TcpClient client, DataBrokerClient broker)
         {
             this.server = server;
             this.client = client;
+            this.broker = broker;
             this.reader = new StreamReader(client.GetStream(), Encoding.UTF8);
             this.writer = new StreamWriter(client.GetStream(), Encoding.UTF8) { AutoFlush = true };
         }
@@ -145,15 +144,13 @@ namespace HTCommander
         {
             try
             {
-                //mainForm.Debug("IMAP: Client connected");
+                broker.LogInfo("IMAP: Client connected");
                 writer.WriteLine("* OK HTCommander IMAP Server Ready");
 
                 string line;
                 while ((line = reader.ReadLine()) != null)
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
-                    
-                    //mainForm.Debug($"IMAP C: {line}");
                     ProcessCommand(line);
                 }
             }
@@ -257,10 +254,9 @@ namespace HTCommander
                 // Don't log or respond if connection is already closed
                 if (ex is IOException || ex is InvalidOperationException)
                 {
-                    // Connection closed, exit gracefully
                     return;
                 }
-                //mainForm.Debug($"IMAP command error: {ex.Message}");
+                broker.LogInfo($"IMAP command error: {ex.Message}");
                 try
                 {
                     SendResponse(tag, $"BAD Command failed: {ex.Message}");
@@ -280,8 +276,6 @@ namespace HTCommander
 
         private void HandleLogin(string tag, string args)
         {
-            /*
-            // Parse LOGIN username password
             string[] parts = ParseImapString(args);
             if (parts.Length < 2)
             {
@@ -291,22 +285,19 @@ namespace HTCommander
 
             string user = parts[0];
             string pass = parts[1];
+            string winlinkPassword = DataBroker.GetValue<string>(0, "WinlinkPassword", "");
 
-            // Authenticate - accept multiple username formats
-            if (IsValidUsername(user) && pass == mainForm.winlinkPassword)
+            if (IsValidUsername(user) && pass == winlinkPassword)
             {
                 authenticated = true;
-                username = user;
-                mainForm.Debug($"IMAP: User {username} authenticated");
-                // Send capability info with successful login response (RFC 3501 requirement)
+                broker.LogInfo($"IMAP: User {user} authenticated");
                 SendResponse(tag, "OK [CAPABILITY IMAP4rev1 AUTH=PLAIN UIDPLUS] LOGIN completed");
             }
             else
             {
-                mainForm.Debug($"IMAP: Authentication failed for {user}");
+                broker.LogInfo($"IMAP: Authentication failed for {user}");
                 SendResponse(tag, "NO LOGIN failed");
             }
-            */
         }
 
         private void HandleAuthenticate(string tag, string args)
@@ -329,7 +320,7 @@ namespace HTCommander
             {
                 writer.WriteLine($"* LSUB () \"/\" \"{folder}\"");
             }
-            
+
             SendResponse(tag, "OK LSUB completed");
         }
 
@@ -358,7 +349,7 @@ namespace HTCommander
 
             // Parse flags (optional)
             string flagsStr = parts[1].Trim('(', ')');
-            
+
             // Parse size {396}
             string sizeStr = parts[2].Trim('{', '}');
             if (!int.TryParse(sizeStr, out int messageSize))
@@ -381,19 +372,18 @@ namespace HTCommander
             }
 
             string messageData = new string(buffer, 0, totalRead);
-            
+
             // Read the trailing CRLF
             reader.ReadLine();
 
             // Parse the RFC822 message
             WinLinkMail mail = ParseRfc822Message(messageData);
-            mail.Mailbox = folderName; // Use the folder name string
+            mail.Mailbox = folderName;
             mail.MID = Guid.NewGuid().ToString("N").Substring(0, 12).ToUpper();
 
-            //mainForm.mailStore.AddMail(mail);
-            //mainForm.UpdateMail();
+            DataBroker.Dispatch(1, "MailReceived", mail, store: false);
 
-            //mainForm.Debug($"IMAP: Email appended to {folderName} - Subject: {mail.Subject}");
+            broker.LogInfo($"IMAP: Email appended to {folderName} - Subject: {mail.Subject}");
             SendResponse(tag, "OK APPEND completed");
         }
 
@@ -467,24 +457,22 @@ namespace HTCommander
 
         private bool IsValidUsername(string user)
         {
-            /*
-            if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(mainForm.callsign))
+            string callsign = DataBroker.GetValue<string>(0, "CallSign", "");
+            int stationId = DataBroker.GetValue<int>(0, "StationId", 0);
+
+            if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(callsign))
                 return false;
 
-            // Normalize to uppercase for comparison
             user = user.ToUpper();
-            string callsign = mainForm.callsign.ToUpper();
+            callsign = callsign.ToUpper();
             string callsignWithId = callsign;
-            if (mainForm.stationId > 0)
-                callsignWithId += "-" + mainForm.stationId;
+            if (stationId > 0)
+                callsignWithId += "-" + stationId;
 
-            // Accept: callsign, callsign-stationId, callsign@winlink.org, callsign-stationId@winlink.org
             return user == callsign ||
                    user == callsignWithId ||
                    user == callsign + "@WINLINK.ORG" ||
                    user == callsignWithId + "@WINLINK.ORG";
-            */
-            return false;
         }
 
         private void HandleList(string tag, string args)
@@ -496,7 +484,6 @@ namespace HTCommander
             }
 
             // Parse LIST reference pattern
-            // Common formats: LIST "" "*", LIST "" "%", LIST "INBOX" "*"
             string[] parts = ParseImapString(args);
             if (parts.Length < 2)
             {
@@ -512,14 +499,11 @@ namespace HTCommander
             string reference = parts[0];
             string pattern = parts[1];
 
-            // List folders based on pattern
-            // "*" means all folders, "%" means top-level folders only
             foreach (var folder in folderToMailbox.Keys)
             {
-                // For simplicity, treat both * and % the same (we don't have hierarchy)
                 writer.WriteLine($"* LIST () \"/\" \"{folder}\"");
             }
-            
+
             SendResponse(tag, "OK LIST completed");
         }
 
@@ -542,11 +526,9 @@ namespace HTCommander
             InitializeMailboxState();
 
             List<WinLinkMail> mails = GetMailsInMailbox(mailboxIndex);
-            
-            // Generate a consistent UIDVALIDITY based on the mailbox itself
-            // This ensures same mailbox always has same UIDVALIDITY
+
             uint uidValidity = (uint)(mailboxIndex + 1000);
-            
+
             writer.WriteLine($"* {mails.Count} EXISTS");
             writer.WriteLine($"* {mails.Count} RECENT");
             if (mails.Count > 0)
@@ -555,7 +537,7 @@ namespace HTCommander
             writer.WriteLine($"* OK [UIDNEXT {uidNext}]");
             writer.WriteLine("* FLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)");
             writer.WriteLine("* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Deleted \\Draft)]");
-            
+
             SendResponse(tag, $"OK [READ-WRITE] SELECT completed");
         }
 
@@ -613,21 +595,18 @@ namespace HTCommander
             string items = parts[1].Trim('(', ')').ToUpper();
 
             List<WinLinkMail> mails = GetMailsInMailbox(selectedMailbox);
-            
-            //mainForm.Debug($"IMAP: FETCH {parts[0]} for mailbox {selectedMailbox}, {mails.Count} mails, {sequences.Count} sequences");
 
             foreach (int seq in sequences)
             {
                 if (seq < 1 || seq > mails.Count)
                 {
-                    //mainForm.Debug($"IMAP: Skipping sequence {seq}, out of range");
                     continue;
                 }
-                
+
                 int index = seq - 1;
                 WinLinkMail mail = mails[index];
                 uint uid = messageUids[index];
-                
+
                 List<string> fetchItems = new List<string>();
 
                 if (items.Contains("UID"))
@@ -639,15 +618,11 @@ namespace HTCommander
                     fetchItems.Add($"FLAGS ({flags})");
                 }
 
-                // If we only have basic items (UID, FLAGS, RFC822.SIZE, INTERNALDATE), output them
                 bool hasOnlyBasicItems = !items.Contains("BODY") && !items.Contains("RFC822");
-                
-                //mainForm.Debug($"IMAP: seq={seq}, hasOnlyBasicItems={hasOnlyBasicItems}, fetchItems.Count={fetchItems.Count}, items=[{items}]");
-                
+
                 if (hasOnlyBasicItems && fetchItems.Count > 0)
                 {
                     string response = $"* {seq} FETCH (" + string.Join(" ", fetchItems) + ")";
-                    //mainForm.Debug($"IMAP: Sending basic FETCH: {response}");
                     writer.WriteLine(response);
                     continue;
                 }
@@ -670,25 +645,22 @@ namespace HTCommander
                     continue;
                 }
 
-                // Check for BODY.PEEK[HEADER - need to do this when NOT hasOnlyBasicItems
                 if (!hasOnlyBasicItems && items.Contains("BODY.PEEK[HEADER"))
                 {
                     string header = BuildRfc822Header(mail);
                     int headerSize = Encoding.UTF8.GetByteCount(header);
-                    
-                    // Add RFC822.SIZE if requested
+
                     if (items.Contains("RFC822.SIZE"))
                     {
                         string fullMessage = BuildRfc822Message(mail);
                         fetchItems.Add($"RFC822.SIZE {Encoding.UTF8.GetByteCount(fullMessage)}");
                     }
-                    
+
                     fetchItems.Add($"BODY[HEADER.FIELDS (FROM TO CC BCC SUBJECT DATE MESSAGE-ID)] {{{headerSize}}}");
-                    
-                    //mainForm.Debug($"IMAP: Sending BODY.PEEK response for seq {seq}");
+
                     writer.WriteLine($"* {seq} FETCH (" + string.Join(" ", fetchItems) + ")");
-                    writer.Write(header); // Literal data
-                    writer.WriteLine(); // CRLF after literal
+                    writer.Write(header);
+                    writer.WriteLine();
                     writer.Flush();
                     continue;
                 }
@@ -727,7 +699,7 @@ namespace HTCommander
             List<int> sequences = ParseSequenceSet(parts[0]);
             string operation = parts[1].ToUpper();
             string flagsStr = parts[2].Trim('(', ')');
-            
+
             bool isAdd = operation.Contains("+");
             bool isRemove = operation.Contains("-");
 
@@ -735,9 +707,9 @@ namespace HTCommander
             {
                 List<WinLinkMail> mails = GetMailsInMailbox(selectedMailbox);
                 if (seq < 1 || seq > mails.Count) continue;
-                
+
                 int index = seq - 1;
-                
+
                 if (!messageFlags.ContainsKey(index))
                     messageFlags[index] = new HashSet<string>();
 
@@ -794,7 +766,7 @@ namespace HTCommander
             foreach (int seq in sequences)
             {
                 if (seq < 1 || seq > mails.Count) continue;
-                
+
                 WinLinkMail mail = mails[seq - 1];
                 WinLinkMail copy = new WinLinkMail
                 {
@@ -805,14 +777,12 @@ namespace HTCommander
                     Subject = mail.Subject,
                     Body = mail.Body,
                     DateTime = mail.DateTime,
-                    Mailbox = destFolder, // Use the folder name string
+                    Mailbox = destFolder,
                     Attachments = mail.Attachments
                 };
-                
-                //mainForm.mailStore.AddMail(copy);
-            }
 
-            //mainForm.UpdateMail();
+                DataBroker.Dispatch(1, "MailReceived", copy, store: false);
+            }
 
             SendResponse(tag, "OK COPY completed");
         }
@@ -841,16 +811,15 @@ namespace HTCommander
             foreach (int index in toDelete)
             {
                 WinLinkMail mail = mails[index];
-                mail.Mailbox = "Trash"; // Move to Trash
+                mail.Mailbox = "Trash";
                 writer.WriteLine($"* {index + 1} EXPUNGE");
             }
 
             foreach (int index in toDelete)
             {
                 WinLinkMail mail = mails[index];
-                //mainForm.mailStore.UpdateMail(mail); // Update the moved mail
+                DataBroker.Dispatch(1, "MailUpdated", mail, store: false);
             }
-            //mainForm.UpdateMail();
             InitializeMailboxState();
 
             SendResponse(tag, "OK EXPUNGE completed");
@@ -920,7 +889,6 @@ namespace HTCommander
 
             string convertedArgs = sequenceSet + (string.IsNullOrEmpty(restOfArgs) ? "" : " " + restOfArgs);
 
-            // Execute command with converted sequence numbers
             switch (subCommand)
             {
                 case "FETCH":
@@ -950,27 +918,24 @@ namespace HTCommander
                 if (part.Contains(':'))
                 {
                     string[] range = part.Split(':');
-                    
-                    // Handle cases like "1234:*" where * means "to the end"
+
                     uint startUid;
                     if (!uint.TryParse(range[0], out startUid))
                         continue;
-                    
+
                     uint endUid = range[1] == "*" ? uint.MaxValue : uint.Parse(range[1]);
 
-                    // Find all sequences with UIDs in this range
                     for (int i = 0; i < messageUids.Count; i++)
                     {
                         uint uid = messageUids[i];
                         if (uid >= startUid && uid <= endUid)
-                            sequences.Add(i + 1); // Convert to 1-based sequence
+                            sequences.Add(i + 1);
                     }
                 }
                 else
                 {
                     if (part == "*")
                     {
-                        // "*" means the highest UID
                         if (messageUids.Count > 0)
                             sequences.Add(messageUids.Count);
                     }
@@ -979,13 +944,12 @@ namespace HTCommander
                         uint uid;
                         if (!uint.TryParse(part, out uid))
                             continue;
-                        
-                        // Find sequence number for this UID
+
                         for (int i = 0; i < messageUids.Count; i++)
                         {
                             if (messageUids[i] == uid)
                             {
-                                sequences.Add(i + 1); // Convert to 1-based sequence
+                                sequences.Add(i + 1);
                                 break;
                             }
                         }
@@ -1009,7 +973,6 @@ namespace HTCommander
             writer.WriteLine("* BYE HTCommander IMAP Server logging out");
             SendResponse(tag, "OK LOGOUT completed");
             Close();
-            // Throw exception to exit the read loop gracefully
             throw new InvalidOperationException("Client requested LOGOUT");
         }
 
@@ -1017,17 +980,14 @@ namespace HTCommander
         {
             messageUids.Clear();
             messageFlags.Clear();
-            
+
             List<WinLinkMail> mails = GetMailsInMailbox(selectedMailbox);
             for (int i = 0; i < mails.Count; i++)
             {
-                // Generate consistent UID from email's MID hash
-                // This ensures the same email always has the same UID
                 uint uid = (uint)Math.Abs(mails[i].MID.GetHashCode());
                 messageUids[i] = uid;
                 messageFlags[i] = new HashSet<string>();
-                
-                // Track highest UID for UIDNEXT
+
                 if (uid >= uidNext)
                     uidNext = uid + 1;
             }
@@ -1035,24 +995,8 @@ namespace HTCommander
 
         private List<WinLinkMail> GetMailsInMailbox(int mailboxIndex)
         {
-            // Convert mailbox index to folder name for string comparison
             string folderName = mailboxToFolder.ContainsKey(mailboxIndex) ? mailboxToFolder[mailboxIndex] : "";
-            /*
-            var mails = mainForm.Mails.Where(m => m.Mailbox == folderName).ToList();
-            
-            // Debug: Show all emails and their mailbox indices
-            if (mailboxIndex == 1) // Outbox
-            {
-                mainForm.Debug($"IMAP: Total emails in system: {mainForm.Mails.Count}");
-                mainForm.Debug($"IMAP: Emails in Outbox (folder {folderName}): {mails.Count}");
-                foreach (var mail in mainForm.Mails)
-                {
-                    mainForm.Debug($"IMAP:   - Subject: '{mail.Subject}', Mailbox: {mail.Mailbox}");
-                }
-            }
-            return mails;
-            */
-            return null;
+            return DataBroker.GetValue<List<WinLinkMail>>(1, "Mails", new List<WinLinkMail>()).Where(m => m.Mailbox == folderName).ToList();
         }
 
         private string BuildRfc822Header(WinLinkMail mail)
@@ -1089,7 +1033,7 @@ namespace HTCommander
         private List<int> ParseSequenceSet(string sequenceSet)
         {
             List<int> result = new List<int>();
-            
+
             if (sequenceSet == "*")
             {
                 List<WinLinkMail> mails = GetMailsInMailbox(selectedMailbox);
@@ -1154,7 +1098,6 @@ namespace HTCommander
         private void SendResponse(string tag, string response)
         {
             string line = $"{tag} {response}";
-            //mainForm.Debug($"IMAP S: {line}");
             writer.WriteLine(line);
         }
 
@@ -1163,7 +1106,6 @@ namespace HTCommander
             try
             {
                 client?.Close();
-                //mainForm.Debug("IMAP: Client disconnected");
             }
             catch { }
             server.RemoveSession(this);

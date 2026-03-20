@@ -10,6 +10,7 @@ using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -356,6 +357,18 @@ namespace HTCommander.Desktop.TabControls
                 Foreground = new SolidColorBrush(Color.Parse("#888")),
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right
             });
+            // Add context menu
+            var contextMenu = new ContextMenu();
+            var copyItem = new MenuItem { Header = "Copy" };
+            string msgText = text;
+            copyItem.Click += async (s, args) =>
+            {
+                var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+                if (clipboard != null) await clipboard.SetTextAsync(msgText);
+            };
+            contextMenu.Items.Add(copyItem);
+            border.ContextMenu = contextMenu;
+
             border.Child = stack;
             VoiceMessages.Children.Add(border);
 
@@ -443,6 +456,16 @@ namespace HTCommander.Desktop.TabControls
                 }
             }
             return -1;
+        }
+
+        private void MuteButton_Click(object sender, RoutedEventArgs e)
+        {
+            bool muted = MuteButton.IsChecked == true;
+            int targetDeviceId = GetVoiceTargetDeviceId();
+            if (targetDeviceId > 0)
+            {
+                broker.Dispatch(targetDeviceId, "SetMute", muted, store: false);
+            }
         }
 
         private bool isRecording = false;

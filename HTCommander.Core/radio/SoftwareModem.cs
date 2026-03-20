@@ -98,7 +98,7 @@ namespace HTCommander
                         HdlcReceiver.FrameReceived -= Parent.OnFrameReceived;
                     }
                 }
-                catch { }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"SoftwareModem.Cleanup: {ex.Message}"); }
 
                 AfskDemodulator = null;
                 AfskDemodState = null;

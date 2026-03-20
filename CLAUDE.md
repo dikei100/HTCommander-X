@@ -46,8 +46,9 @@ All radio protocol logic, data handlers, codecs, and parsers. Key subsystems:
 - **radio/**: AX.25 packet protocol, SoftwareModem (DSP), GAIA frame encode/decode
 - **SSTV/**: Slow-scan TV image encode/decode using SkiaSharp (not System.Drawing)
 - **VoiceHandler**: Speech processing — takes `ISpeechService` constructor param, uses `VoiceHandler.WhisperEngineFactory` static delegate for STT. Subscribes to `Chat`, `Speak`, `Morse` on AllDevices. Requires `VoiceHandlerEnable` with `{ DeviceId, Language, Model }` before it will transmit — fires when radio State becomes `"Connected"`
-- **RadioAudioManager**: Cross-platform audio pipeline (replaces Windows-only `RadioAudio.cs`). Uses `IRadioAudioTransport` for BT audio socket + `IAudioService` for local playback. Handles `TransmitVoicePCM` → SBC encode → RFCOMM, and receive loop → SBC decode → PortAudio output. Created automatically in `Radio` constructor when `platformServices != null`
+- **RadioAudioManager**: Cross-platform audio pipeline (replaces Windows-only `RadioAudio.cs`). Uses `IRadioAudioTransport` for BT audio socket + `IAudioService` for local playback. Handles `TransmitVoicePCM` → SBC encode → RFCOMM, and receive loop → SBC decode → PortAudio output. Created automatically in `Radio` constructor when `platformServices != null`. Supports recording via `WavFileWriter` — `RecordingEnable`/`RecordingDisable` DataBroker events trigger WAV file recording of decoded PCM to `~/Documents/HTCommander/Recordings/`
 - **AgwpeServer**: AGWPE TCP server for external TNC client integration. Self-initializing DataBroker handler; auto-starts/stops based on `AgwpeServerEnabled`/`AgwpeServerPort` settings. Includes `AgwpeFrame` (36-byte header protocol) and per-client `AgwpeTcpClientHandler`. Forwards `UniqueDataFrame` as 'U' monitoring frames to connected clients.
+- **SmtpServer / ImapServer**: Local SMTP/IMAP servers for Winlink email integration. Wired via DataBroker — SMTP dispatches `MailReceived` on incoming email, IMAP reads mail list via `DataBroker.GetValue<List<WinLinkMail>>(1, "Mails", ...)`. Both read `CallSign`, `StationId`, `WinlinkPassword` from DataBroker for authentication.
 
 ### Platform Projects
 
@@ -61,11 +62,14 @@ All radio protocol logic, data handlers, codecs, and parsers. Key subsystems:
 - Platform auto-detected at startup via reflection in `Program.cs`; conditional project references load Windows or Linux platform assembly
 - Supports Light/Dark/Auto themes via `ThemeDictionaries` in `App.axaml` with `App.SetTheme()`
 - Menu bar (File/Radio/View/Help), toolbar, and blue status bar
-- Radio menu: Dual Watch, Scan, GPS, Audio Enabled toggle, Software Modem toggle, channel Import/Export — all auto-enable/disable on radio connect/disconnect
+- Radio menu: Dual Watch, Scan, GPS, Audio Enabled toggle, Software Modem toggle, channel Import/Export, Spectrogram, Audio Clips — all auto-enable/disable on radio connect/disconnect
+- View menu: Radio Panel toggle, All Channels toggle (show/hide empty channel slots, persisted via `ShowAllChannels` setting)
+- Help menu: Radio Information, GPS Information, Check for Updates (`SelfUpdateDialog`), About
 - Settings dialog tabs: General, APRS, Voice, Winlink, Servers, Data Sources, Audio, Modem. General tab has "Reset All Settings to Defaults". Audio controls (volume, squelch, output volume, mic gain, mute) in Settings → Audio tab
 - Image assets in `Assets/` auto-included as `AvaloniaResource` via csproj ItemGroup
 - Radio panel: device image with screen overlay (VFO frequencies, signal), VFO cards (double-click → channel picker, right-click → change channel or edit frequency), RSSI/TX bars, status grid, PTT button, WAV file transmit buttons (visible when connected)
-- Channel list sidebar: double-click to edit channel, right-click for "Set as VFO A/B" or "Edit Channel", drag-and-drop to copy channel settings between slots
+- Channel list sidebar: double-click to edit channel, right-click for "Set as VFO A/B" or "Edit Channel", drag-and-drop to copy channel settings between slots. Channel name colors use `GetThemeBrush("PrimaryText")` and refresh on theme change via `ActualThemeVariantChanged`
+- Detachable tabs: right-click any tab header → "Detach Tab" opens content in a separate `DetachedTabDialog` window; closing re-attaches the tab
 - VFO channel switching dispatches `ChannelChangeVfoA` / `ChannelChangeVfoB` to the active radio device — no Core changes needed, Radio.cs already handles these
 - VFO frequency mode toggle: `vfo_x` is a 2-bit field in `RadioSettings` (bit 0 = VFO A, bit 1 = VFO B; 0=memory, 1=frequency). Toggled via `WriteSettings` with `RadioSettings.ToByteArray(..., vfo_x)` overload. Context menu items only visible when `RadioDevInfo.support_vfo == true`
 - Tab order: Communication, Contacts, Packets, Terminal, BBS, Mail, Torrent, APRS, Map, Debug
@@ -169,7 +173,7 @@ Avalonia Desktop supports Light, Dark, and Auto (follow OS) themes. Colors are d
 | `SecondaryText` | `#888888` | `#555555` | Labels (Battery, GPS, RSSI, channel frequencies) |
 | `TertiaryText` | `#666666` | `#777777` | Channel slot numbers |
 
-For programmatic theme-aware colors in code-behind, use `GetThemeBrush(resourceKey)` in `MainWindow.axaml.cs`.
+For programmatic theme-aware colors in code-behind, use `GetThemeBrush(resourceKey)` in `MainWindow.axaml.cs`. When caching theme brushes in data items (e.g., channel list), subscribe to `ActualThemeVariantChanged` to rebuild the list so colors update on theme switch.
 
 **Never use hardcoded dark colors** (`#2D2D30`, `#1E1E1E`, `#3F3F46`, `#252526`, `#444`) in AXAML backgrounds. Use the DynamicResource keys above. Accent/functional colors (PTT button red `#C62828`, status bar blue `#007ACC`, VFO frequency colors) are theme-independent.
 
@@ -177,7 +181,11 @@ For programmatic theme-aware colors in code-behind, use `GetThemeBrush(resourceK
 - Radio audio controls: `SetVolumeLevel` (int 0-15, hardware), `SetSquelchLevel` (int 0-9), `SetOutputVolume` (int 0-100, software), `SetAudio` (bool, streaming toggle), `SetMute` (bool). Radio reports back via `Volume` and `AudioState` events
 - Voice transmit modes dispatch to device 1: `Chat`, `Speak`, `Morse` (text commands); DTMF generates PCM locally via `DmtfEngine` and dispatches `TransmitVoicePCM` to radio device. VoiceHandler must be enabled first via `VoiceHandlerEnable` dispatch (happens automatically when radio state becomes `"Connected"`)
 - PTT mic transmit: captures at 48kHz via `parecord`, resamples to 32kHz with linear interpolation, dispatches `TransmitVoicePCM` directly to radio device (bypasses VoiceHandler)
-- Map tab uses Mapsui 5.0 with `WritableLayer` + `PointFeature` + `LabelStyle` for APRS station markers. APRS positions from `AprsPacket.Position.CoordinateSet.Latitude/Longitude.Value`
+- Map tab uses Mapsui 5.0 with `WritableLayer` + `PointFeature` + `LabelStyle` for APRS station markers and airplane markers. APRS positions from `AprsPacket.Position.CoordinateSet.Latitude/Longitude.Value`. Airplane markers rendered via `Airplanes` DataBroker event with orange dot + flight name/altitude labels; toggled via `ShowAirplanesOnMap` setting
+- APRS tab has right-click context menu: Details, Show Location (if position data), Copy Message/Callsign, SMS Message, Weather Report (if weather data)
+- Voice tab (Communication): Chat/Speak/Morse/DTMF modes, SSTV send, right-click Copy on messages, Mute toggle button
+- Spectrogram dialog: built-in FFT + SkiaSharp rendering, subscribes to `AudioDataAvailable` from radio, configurable max frequency (4/8/16 kHz) and roll mode
+- Recording playback dialog: plays WAV files via `IAudioService.CreateOutput()` with progress bar
 - Settings are stored as int 0/1 for booleans that need cross-platform compat (e.g., `AllowTransmit`, `WebServerEnabled`), use `DataBroker.GetValue<int>(0, key, 0) == 1` to read
 - `RadioChannelInfo` has a copy constructor: `new RadioChannelInfo(source)` — used for channel drag-and-drop copy operations
 - Torrent file creation: compress with Brotli/Deflate (pick smallest), prepend compression type byte, hash with `Utils.ComputeShortSha256Hash()`, split into `Torrent.DefaultBlockSize` blocks

@@ -13,6 +13,7 @@
                             VerticalAlignment="Center" Spacing="4">
                     <Button Name="SendSstvButton" Content="Send SSTV" Click="SendSstv_Click"
                             Padding="8,2" IsEnabled="False" />
+                    <ToggleButton Name="MuteButton" Content="Mute" Click="MuteButton_Click" Padding="8,2" />
                     <ComboBox Name="ModeCombo" Width="100" SelectedIndex="0">
                         <ComboBoxItem Content="Chat" />
                         <ComboBoxItem Content="Speak" />

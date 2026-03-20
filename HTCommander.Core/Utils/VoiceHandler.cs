@@ -219,7 +219,7 @@ namespace HTCommander
                 _currentVoice = DataBroker.GetValue<string>(0, "Voice", "Microsoft Zira Desktop");
                 if (_speechService != null && _speechService.IsAvailable)
                 {
-                    try { _speechService.SelectVoice(_currentVoice); } catch (Exception) { }
+                    try { _speechService.SelectVoice(_currentVoice); } catch (Exception ex) { broker.LogInfo($"[VoiceHandler] SelectVoice failed: {ex.Message}"); }
                     broker.LogInfo($"[VoiceHandler] Text-to-speech initialized with voice: {_currentVoice}");
                 }
                 else
@@ -1272,7 +1272,7 @@ namespace HTCommander
             while (_recordingBuffer.TryDequeue(out byte[] chunk))
             {
                 try { _currentRecordingWriter.Write(chunk, 0, chunk.Length); }
-                catch (Exception) { }
+                catch (Exception ex) { broker.LogInfo($"[VoiceHandler] Recording drain write error: {ex.Message}"); }
             }
 
             try
@@ -1332,7 +1332,7 @@ namespace HTCommander
                             File.Delete(fullPath);
                         }
                     }
-                    catch (Exception) { }
+                    catch (Exception ex2) { broker.LogInfo($"[VoiceHandler] Failed to delete short recording: {ex2.Message}"); }
 
                     broker.LogInfo($"[VoiceHandler] Discarded short recording: {_currentRecordingFilename}");
                 }
@@ -2257,7 +2257,7 @@ namespace HTCommander
                         string fileName = Path.GetFileName(filePath);
                         if (!referencedFiles.Contains(fileName))
                         {
-                            try { File.Delete(filePath); deletedCount++; } catch (Exception) { }
+                            try { File.Delete(filePath); deletedCount++; } catch (Exception ex) { broker?.LogInfo($"[VoiceHandler] Failed to delete orphaned wav: {ex.Message}"); }
                         }
                     }
                 }
@@ -2270,7 +2270,7 @@ namespace HTCommander
                         string fileName = Path.GetFileName(filePath);
                         if (!referencedFiles.Contains(fileName))
                         {
-                            try { File.Delete(filePath); deletedCount++; } catch (Exception) { }
+                            try { File.Delete(filePath); deletedCount++; } catch (Exception ex) { broker?.LogInfo($"[VoiceHandler] Failed to delete orphaned png: {ex.Message}"); }
                         }
                     }
                 }

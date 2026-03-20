@@ -743,7 +743,7 @@ namespace HTCommander
 
                         if (sfile != null)
                         {
-                            if ((file.Blocks == null) && (file.Blocks.Length <= blockNumber)) return;
+                            if ((file.Blocks == null) || (file.Blocks.Length <= blockNumber)) return;
                             if (file.Blocks[blockNumber] == null)
                             {
                                 file.Blocks[blockNumber] = block;

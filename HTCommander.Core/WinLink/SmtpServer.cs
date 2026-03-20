@@ -16,7 +16,7 @@ namespace HTCommander
 {
     public class SmtpServer
     {
-        // TODO: MainForm dependency removed for cross-platform. Callback functionality to be wired via DataBroker.
+        private DataBrokerClient broker;
         private TcpListener listener;
         private Thread listenerThread;
         private bool running;
@@ -26,6 +26,7 @@ namespace HTCommander
         public SmtpServer(int port)
         {
             this.Port = port;
+            this.broker = new DataBrokerClient();
         }
 
         public void Start()
@@ -38,7 +39,7 @@ namespace HTCommander
                 listenerThread = new Thread(ListenerLoop);
                 listenerThread.IsBackground = true;
                 listenerThread.Start();
-                //mainForm.Debug($"SMTP server started on port {Port}");
+                broker.LogInfo($"SMTP server started on port {Port}");
             }
             catch (Exception)
             {
@@ -60,7 +61,7 @@ namespace HTCommander
                 }
                 sessions.Clear();
             }
-            //mainForm.Debug("SMTP server stopped");
+            broker.LogInfo("SMTP server stopped");
         }
 
         private void ListenerLoop()
@@ -70,7 +71,7 @@ namespace HTCommander
                 try
                 {
                     TcpClient client = listener.AcceptTcpClient();
-                    SmtpSession session = new SmtpSession(this, client);
+                    SmtpSession session = new SmtpSession(this, client, broker);
                     lock (sessions)
                     {
                         sessions.Add(session);
@@ -98,7 +99,7 @@ namespace HTCommander
     public class SmtpSession
     {
         private SmtpServer server;
-        // TODO: MainForm dependency removed for cross-platform. Callback functionality to be wired via DataBroker.
+        private DataBrokerClient broker;
         private TcpClient client;
         private StreamReader reader;
         private StreamWriter writer;
@@ -107,10 +108,11 @@ namespace HTCommander
         private bool inDataMode;
         private StringBuilder dataBuffer;
 
-        public SmtpSession(SmtpServer server, TcpClient client)
+        public SmtpSession(SmtpServer server, TcpClient client, DataBrokerClient broker)
         {
             this.server = server;
             this.client = client;
+            this.broker = broker;
             this.reader = new StreamReader(client.GetStream(), Encoding.UTF8);
             this.writer = new StreamWriter(client.GetStream(), Encoding.UTF8) { AutoFlush = true };
             this.rcptTo = new List<string>();
@@ -122,26 +124,20 @@ namespace HTCommander
         {
             try
             {
-                //mainForm.Debug("SMTP: Client connected from " + ((System.Net.IPEndPoint)client.Client.RemoteEndPoint).Address);
+                broker.LogInfo("SMTP: Client connected from " + ((System.Net.IPEndPoint)client.Client.RemoteEndPoint).Address);
 
-                // RFC 5321 compliant greeting with hostname
-                // Use machine name to avoid DNS issues with Outlook
-                //string hostname = System.Net.Dns.GetHostName();
-                //if (string.IsNullOrEmpty(hostname)) hostname = "localhost";
-                //string hostname = "localhost";
                 string greeting = "220 localhost ESMTP\r\n";
                 byte[] greetingBytes = Encoding.UTF8.GetBytes(greeting);
                 client.GetStream().Write(greetingBytes, 0, greetingBytes.Length);
                 client.GetStream().Flush();
-                //mainForm.Debug($"SMTP S: {greeting.TrimEnd()}");
 
                 // Read with timeout to detect disconnects
                 NetworkStream stream = client.GetStream();
                 stream.ReadTimeout = 30000; // 30 second timeout
-                
+
                 byte[] buffer = new byte[4096];
                 StringBuilder lineBuffer = new StringBuilder();
-                
+
                 while (true)
                 {
                     int bytesRead = 0;
@@ -154,32 +150,27 @@ namespace HTCommander
                         // Read timeout or connection closed
                         break;
                     }
-                    
+
                     if (bytesRead == 0)
                     {
-                        //mainForm.Debug("SMTP: Client disconnected (0 bytes read)");
                         break;
                     }
 
                     string received = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    //mainForm.Debug($"SMTP: Received {bytesRead} bytes: [{BitConverter.ToString(buffer, 0, bytesRead)}]");
-                    //mainForm.Debug($"SMTP: As string: [{received}]");
-                    
+
                     lineBuffer.Append(received);
-                    
+
                     // Process complete lines
                     string bufferedText = lineBuffer.ToString();
                     int newlinePos;
-                    
+
                     while ((newlinePos = bufferedText.IndexOf('\n')) >= 0)
                     {
                         string line = bufferedText.Substring(0, newlinePos).TrimEnd('\r', '\n');
                         bufferedText = bufferedText.Substring(newlinePos + 1);
-                        
+
                         if (!string.IsNullOrWhiteSpace(line) || inDataMode)
                         {
-                            //mainForm.Debug($"SMTP C: {line}");
-
                             if (inDataMode)
                             {
                                 ProcessDataLine(line);
@@ -190,7 +181,7 @@ namespace HTCommander
                             }
                         }
                     }
-                    
+
                     lineBuffer.Clear();
                     lineBuffer.Append(bufferedText);
                 }
@@ -246,7 +237,7 @@ namespace HTCommander
             }
             catch (Exception ex)
             {
-                //mainForm.Debug($"SMTP command error: {ex.Message}");
+                broker.LogInfo($"SMTP command error: {ex.Message}");
                 SendResponse($"451 Requested action aborted: {ex.Message}");
             }
         }
@@ -341,24 +332,22 @@ namespace HTCommander
 
         private bool IsValidUsername(string user)
         {
-            /*
-            if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(mainForm.callsign))
+            string callsign = DataBroker.GetValue<string>(0, "CallSign", "");
+            int stationId = DataBroker.GetValue<int>(0, "StationId", 0);
+
+            if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(callsign))
                 return false;
 
-            // Normalize to uppercase for comparison
             user = user.ToUpper();
-            string callsign = mainForm.callsign.ToUpper();
+            callsign = callsign.ToUpper();
             string callsignWithId = callsign;
-            if (mainForm.stationId > 0)
-                callsignWithId += "-" + mainForm.stationId;
+            if (stationId > 0)
+                callsignWithId += "-" + stationId;
 
-            // Accept: callsign, callsign-stationId, callsign@winlink.org, callsign-stationId@winlink.org
             return user == callsign ||
                    user == callsignWithId ||
                    user == callsign + "@WINLINK.ORG" ||
                    user == callsignWithId + "@WINLINK.ORG";
-            */
-            return false;
         }
 
         private void ProcessEmailData()
@@ -366,7 +355,7 @@ namespace HTCommander
             try
             {
                 string emailData = dataBuffer.ToString();
-                
+
                 // Parse email headers and body
                 string from = mailFrom;
                 string to = string.Join("; ", rcptTo);
@@ -441,10 +430,9 @@ namespace HTCommander
                     Mailbox = "Outbox"
                 };
 
-                //mainForm.mailStore.AddMail(mail);
-                //mainForm.UpdateMail();
+                DataBroker.Dispatch(1, "MailReceived", mail, store: false);
 
-                //mainForm.Debug($"SMTP: Email queued to Outbox - From: {from}, To: {to}, Subject: {subject}");
+                broker.LogInfo($"SMTP: Email queued to Outbox - From: {from}, To: {to}, Subject: {subject}");
                 SendResponse("250 OK: Message accepted for delivery");
             }
             catch (Exception)
@@ -480,7 +468,6 @@ namespace HTCommander
 
         private void SendResponse(string response)
         {
-            //mainForm.Debug($"SMTP S: {response}");
             writer.WriteLine(response);
         }
 
@@ -489,7 +476,6 @@ namespace HTCommander
             try
             {
                 client?.Close();
-                //mainForm.Debug("SMTP: Client disconnected");
             }
             catch { }
             server.RemoveSession(this);

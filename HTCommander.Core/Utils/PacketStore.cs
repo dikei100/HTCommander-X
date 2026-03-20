@@ -118,8 +118,9 @@ namespace HTCommander
             {
                 _packetFile = File.Open(Path.Combine(_appDataPath, PacketFileName), FileMode.Append, FileAccess.Write, FileShare.Read);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"PacketStore.OpenPacketFile: {ex.Message}");
                 _packetFile = null;
             }
         }
@@ -139,8 +140,9 @@ namespace HTCommander
                     lines = File.ReadAllLines(filePath);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"PacketStore.LoadPackets: {ex.Message}");
                 return;
             }
 
@@ -165,9 +167,9 @@ namespace HTCommander
                             _packets.Add(fragment);
                         }
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        // Skip malformed lines
+                        System.Diagnostics.Debug.WriteLine($"PacketStore.LoadPackets line {i}: {ex.Message}");
                     }
                 }
             }
@@ -311,9 +313,9 @@ namespace HTCommander
                 _packetFile.Write(bytes, 0, bytes.Length);
                 _packetFile.Flush();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Ignore write errors
+                System.Diagnostics.Debug.WriteLine($"PacketStore.WritePacketToFile: {ex.Message}");
             }
         }
 

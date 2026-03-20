@@ -259,7 +259,7 @@ namespace HTCommander
 
                 BroadcastMonitoringFrame(frame);
             }
-            catch (Exception) { }
+            catch (Exception ex) { Log($"AGWPE OnUniqueDataFrame error: {ex.Message}"); }
         }
 
         private void BroadcastMonitoringFrame(AgwpeFrame frame)

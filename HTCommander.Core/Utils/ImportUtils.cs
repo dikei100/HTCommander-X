@@ -108,7 +108,7 @@ namespace HTCommander
         public static RadioChannelInfo[] ParseChannelsFromFile(string filename)
         {
             string[] lines = null;
-            try { lines = File.ReadAllLines(filename); } catch (Exception) { return null; }
+            try { lines = File.ReadAllLines(filename); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ImportUtils.ParseChannelsFromFile: {ex.Message}"); return null; }
             if ((lines == null) || (lines.Length < 2)) return null;
 
             Dictionary<string, int> headers = lines[0].Split(',').Select((h, i) => new { h, i }).ToDictionary(x => Utils.RemoveQuotes(x.h.Trim()), x => x.i);
@@ -120,7 +120,7 @@ namespace HTCommander
                 for (int i = 1; i < lines.Length; i++)
                 {
                     RadioChannelInfo c = null;
-                    try { c = ParseChannel1(lines[i].Split(','), headers); } catch (Exception) { }
+                    try { c = ParseChannel1(lines[i].Split(','), headers); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ImportUtils.ParseChannel1 line {i}: {ex.Message}"); }
                     if (c != null) { importChannels.Add(c); }
                 }
             }
@@ -131,7 +131,7 @@ namespace HTCommander
                 for (int i = 1; i < lines.Length; i++)
                 {
                     RadioChannelInfo c = null;
-                    try { c = ParseChannel2(lines[i].Split(','), headers); } catch (Exception) { }
+                    try { c = ParseChannel2(lines[i].Split(','), headers); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ImportUtils.ParseChannel2 line {i}: {ex.Message}"); }
                     if (c != null) { importChannels.Add(c); }
                 }
             }
@@ -142,7 +142,7 @@ namespace HTCommander
                 for (int i = 1; i < lines.Length; i++)
                 {
                     RadioChannelInfo c = null;
-                    try { c = ParseChannel3(lines[i].Split(','), headers); } catch (Exception) { }
+                    try { c = ParseChannel3(lines[i].Split(','), headers); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ImportUtils.ParseChannel3 line {i}: {ex.Message}"); }
                     if (c != null) { importChannels.Add(c); }
                 }
             }

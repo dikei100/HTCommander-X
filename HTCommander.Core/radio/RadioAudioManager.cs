@@ -52,6 +52,10 @@ namespace HTCommander
         private bool inAudioRun = false;
         private bool inAudioRunIsTransmit = false;
 
+        // Recording
+        private WavFileWriter _recorder;
+        private bool _recording;
+
         // Voice transmission
         private ConcurrentQueue<byte[]> pcmQueue = new ConcurrentQueue<byte[]>();
         private bool isTransmitting = false;
@@ -61,7 +65,7 @@ namespace HTCommander
         private byte[] ReminderTransmitPcmAudio = null;
         private bool VoiceTransmitCancel = false;
 
-        public bool Recording => false; // TODO: implement recording support
+        public bool Recording => _recording;
         public bool IsAudioEnabled => _isAudioEnabled;
         public float Volume { get => _outputVolume; set { _outputVolume = value; if (audioOutput != null) audioOutput.Volume = value; } }
         public int currentChannelId { get; set; }
@@ -79,6 +83,8 @@ namespace HTCommander
             broker.Subscribe(DeviceId, "SetOutputVolume", OnSetOutputVolume);
             broker.Subscribe(DeviceId, "SetMute", OnSetMute);
             broker.Subscribe(DeviceId, "CancelVoiceTransmit", OnCancelVoiceTransmit);
+            broker.Subscribe(DeviceId, "RecordingEnable", OnRecordingEnable);
+            broker.Subscribe(DeviceId, "RecordingDisable", OnRecordingDisable);
 
             // Initialize output volume from stored value
             int storedVol = broker.GetValue<int>(DeviceId, "OutputAudioVolume", 100);
@@ -150,6 +156,55 @@ namespace HTCommander
             while (pcmQueue.TryDequeue(out _)) { }
         }
 
+        private void OnRecordingEnable(int deviceId, string name, object data)
+        {
+            string recordingsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "HTCommander", "Recordings");
+            Directory.CreateDirectory(recordingsDir);
+            string filename = $"Recording_{DateTime.Now:yyyyMMdd_HHmmss}.wav";
+            string path = Path.Combine(recordingsDir, filename);
+            StartRecording(path);
+        }
+
+        private void OnRecordingDisable(int deviceId, string name, object data)
+        {
+            StopRecording();
+        }
+
+        #endregion
+
+        #region Recording
+
+        public void StartRecording(string path)
+        {
+            if (_recording) return;
+            try
+            {
+                _recorder = new WavFileWriter(path, 32000, 16, 1);
+                _recording = true;
+                Debug($"Recording started: {path}");
+            }
+            catch (Exception ex)
+            {
+                Debug($"Failed to start recording: {ex.Message}");
+            }
+        }
+
+        public void StopRecording()
+        {
+            if (!_recording) return;
+            _recording = false;
+            try
+            {
+                _recorder?.Dispose();
+                _recorder = null;
+                Debug("Recording stopped.");
+            }
+            catch (Exception ex)
+            {
+                Debug($"Error stopping recording: {ex.Message}");
+            }
+        }
+
         #endregion
 
         #region Audio Lifecycle
@@ -170,12 +225,12 @@ namespace HTCommander
             {
                 if (!running && audioLoopTask == null) return;
                 running = false;
-                try { audioLoopCts?.Cancel(); } catch (Exception) { }
+                try { audioLoopCts?.Cancel(); } catch (Exception ex) { Debug($"Stop.Cancel: {ex.Message}"); }
             }
 
             if (audioLoopTask != null)
             {
-                try { audioLoopTask.Wait(TimeSpan.FromSeconds(3)); } catch (Exception) { }
+                try { audioLoopTask.Wait(TimeSpan.FromSeconds(3)); } catch (Exception ex) { Debug($"Stop.Wait: {ex.Message}"); }
             }
 
             lock (connectionLock)
@@ -184,14 +239,15 @@ namespace HTCommander
                 transport?.Dispose();
                 transport = null;
 
-                try { audioLoopCts?.Dispose(); } catch (Exception) { }
+                try { audioLoopCts?.Dispose(); } catch (Exception ex) { Debug($"Stop.DisposeCts: {ex.Message}"); }
                 audioLoopCts = null;
                 audioLoopTask = null;
             }
 
-            try { audioOutput?.Stop(); audioOutput?.Dispose(); } catch (Exception) { }
+            try { audioOutput?.Stop(); audioOutput?.Dispose(); } catch (Exception ex) { Debug($"Stop.DisposeAudioOutput: {ex.Message}"); }
             audioOutput = null;
 
+            StopRecording();
             _isAudioEnabled = false;
             DispatchAudioStateChanged(false);
             Thread.Sleep(100);
@@ -368,6 +424,10 @@ namespace HTCommander
             catch (Exception ex)
             {
                 Debug($"Audio loop error: {ex.Message}");
+            }
+            finally
+            {
+                accumulator.Dispose();
             }
 
             _isAudioEnabled = false;
@@ -594,6 +654,13 @@ namespace HTCommander
                     if (audioOutput != null && !_isMuted)
                     {
                         audioOutput.AddSamples(pcmFrame, 0, totalWritten);
+                    }
+
+                    // Write to recording file if recording
+                    if (_recording && _recorder != null)
+                    {
+                        try { _recorder.Write(pcmFrame, 0, totalWritten); }
+                        catch (Exception ex) { Debug($"DecodeSbcFrame.RecorderWrite: {ex.Message}"); }
                     }
 
                     // Dispatch decoded audio data for VoiceHandler
@@ -839,6 +906,7 @@ namespace HTCommander
             if (_disposed) return;
             _disposed = true;
 
+            StopRecording();
             Stop();
             broker?.Dispose();
         }

@@ -105,7 +105,7 @@ namespace HTCommander.Gps
                     Encoding    = Encoding.ASCII,
                 };
             }
-            catch (Exception) { return; }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"GpsSerialHandler.StartPort create: {ex.Message}"); return; }
 
             // Expose the port so StopPort() can Dispose() it to interrupt a blocking Open()
             _pendingPort = port;
@@ -119,8 +119,9 @@ namespace HTCommander.Gps
                     port.Open();   // may throw if _pendingPort was disposed by StopPort()
                     opened = true;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine($"GpsSerialHandler.StartPort open: {ex.Message}");
                     try { port.Dispose(); } catch { }
                 }
                 finally
@@ -214,7 +215,7 @@ namespace HTCommander.Gps
                     }
                 }
             }
-            catch (Exception) { /* ignore read errors */ }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"GpsSerialHandler.OnDataReceived: {ex.Message}"); }
         }
 
         // ------------------------------------------------------------------

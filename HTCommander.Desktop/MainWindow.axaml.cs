@@ -43,6 +43,7 @@ namespace HTCommander.Desktop
         private RadioHtStatus currentStatus;
         private RadioDevInfo currentDevInfo;
         private Dictionary<int, string> radioFriendlyNames = new Dictionary<int, string>();
+        private bool showAllChannels;
 
         private string GetRadioName(int deviceId)
         {
@@ -80,6 +81,13 @@ namespace HTCommander.Desktop
             // Init software modem checkbox
             string modemMode = DataBroker.GetValue<string>(0, "SoftwareModemMode", "None");
             SoftwareModemCheck.IsChecked = modemMode != null && modemMode != "None";
+
+            // Init all channels toggle
+            showAllChannels = DataBroker.GetValue<int>(0, "ShowAllChannels", 0) == 1;
+            AllChannelsCheck.IsChecked = showAllChannels;
+
+            // Refresh channel list on theme change so colors update
+            this.ActualThemeVariantChanged += (s, e) => UpdateChannelList();
 
             broker.LogInfo("HTCommander Desktop (Avalonia) started. Ready to connect.");
         }
@@ -130,6 +138,7 @@ namespace HTCommander.Desktop
                         MenuScan.IsEnabled = true;
                         MenuGpsEnabled.IsEnabled = true;
                         MenuAudioEnabled.IsEnabled = true;
+                        MenuAudioClips.IsEnabled = true;
                         MainPttButton.IsVisible = true;
                         WavTransmitPanel.IsVisible = true;
                         activeDeviceId = deviceId;
@@ -157,6 +166,7 @@ namespace HTCommander.Desktop
                         MenuScan.IsEnabled = false;
                         MenuGpsEnabled.IsEnabled = false;
                         MenuAudioEnabled.IsEnabled = false;
+                        MenuAudioClips.IsEnabled = false;
                         MainPttButton.IsVisible = false;
                         WavTransmitPanel.IsVisible = false;
                         MainWavStatus.Text = "";
@@ -342,7 +352,7 @@ namespace HTCommander.Desktop
             {
                 var ch = currentChannels[i];
                 if (ch == null) continue;
-                if (string.IsNullOrEmpty(ch.name_str) && ch.rx_freq == 0) continue;
+                if (!showAllChannels && string.IsNullOrEmpty(ch.name_str) && ch.rx_freq == 0) continue;
 
                 bool isA = (i == activeA);
                 bool isB = (i == activeB);
@@ -662,6 +672,33 @@ namespace HTCommander.Desktop
             bool show = !RadioPanel.IsVisible;
             RadioPanelCheck.IsChecked = show;
             if (activeDeviceId >= 0) RadioPanel.IsVisible = show;
+        }
+
+        private void MenuAllChannels_Click(object sender, RoutedEventArgs e)
+        {
+            showAllChannels = !showAllChannels;
+            AllChannelsCheck.IsChecked = showAllChannels;
+            DataBroker.Dispatch(0, "ShowAllChannels", showAllChannels ? 1 : 0);
+            UpdateChannelList();
+        }
+
+        private async void MenuCheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SelfUpdateDialog();
+            await dialog.ShowDialog(this);
+        }
+
+        private async void MenuSpectrogram_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SpectrogramDialog();
+            await dialog.ShowDialog(this);
+        }
+
+        private async void MenuAudioClips_Click(object sender, RoutedEventArgs e)
+        {
+            if (activeDeviceId < 0) return;
+            var dialog = new RadioAudioClipsDialog(activeDeviceId);
+            await dialog.ShowDialog(this);
         }
 
         private async void MenuRadioInfo_Click(object sender, RoutedEventArgs e)
@@ -1031,6 +1068,44 @@ namespace HTCommander.Desktop
             ChannelList.AddHandler(InputElement.PointerMovedEvent, OnChannelPointerMoved, RoutingStrategies.Tunnel);
             ChannelList.AddHandler(DragDrop.DropEvent, OnChannelDrop);
             ChannelList.AddHandler(DragDrop.DragOverEvent, OnChannelDragOver);
+
+            // Set up tab detach context menus
+            foreach (var tabItem in MainTabControl.Items.OfType<TabItem>())
+            {
+                var menu = new ContextMenu();
+                var detachItem = new MenuItem { Header = "Detach Tab" };
+                detachItem.Click += DetachTab_Click;
+                menu.Items.Add(detachItem);
+                tabItem.ContextMenu = menu;
+            }
+        }
+
+        private void DetachTab_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not MenuItem menuItem) return;
+            var contextMenu = menuItem.Parent as ContextMenu;
+            if (contextMenu?.PlacementTarget is not TabItem tabItem) return;
+
+            string title = tabItem.Header?.ToString() ?? "Tab";
+            var content = tabItem.Content as Control;
+            if (content == null) return;
+
+            // Remove content from tab and hide the tab
+            tabItem.Content = null;
+            tabItem.IsVisible = false;
+
+            // Keep a reference to the content since DetachedTabDialog.OnClosed nulls it before raising Closed
+            var detachedContent = content;
+
+            // Create detached window (non-modal)
+            var dialog = new DetachedTabDialog(title, detachedContent);
+            dialog.Closed += (s, args) =>
+            {
+                // Re-attach on close
+                tabItem.Content = detachedContent;
+                tabItem.IsVisible = true;
+            };
+            dialog.Show();
         }
 
         private void OnChannelPointerPressed(object sender, PointerPressedEventArgs e)

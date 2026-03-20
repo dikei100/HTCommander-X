@@ -24,6 +24,12 @@ namespace HTCommander.Desktop.TabControls
         public string Type { get; set; }
         public string Message { get; set; }
         public bool Visible { get; set; } = true;
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public bool HasPosition { get; set; }
+        public bool HasWeather { get; set; }
+        public object AprsPacketData { get; set; }
+        public object AX25PacketData { get; set; }
     }
 
     public partial class AprsTabControl : UserControl
@@ -300,6 +306,13 @@ namespace HTCommander.Desktop.TabControls
 
             if (string.IsNullOrWhiteSpace(message)) return;
 
+            bool hasPosition = aprsPacket.Position != null &&
+                (aprsPacket.Position.CoordinateSet.Latitude.Value != 0 ||
+                 aprsPacket.Position.CoordinateSet.Longitude.Value != 0);
+            bool hasWeather = aprsPacket.DataType == PacketDataType.WeatherReport ||
+                              aprsPacket.DataType == PacketDataType.PeetBrosUII1 ||
+                              aprsPacket.DataType == PacketDataType.PeetBrosUII2;
+
             var entry = new AprsEntry
             {
                 Time = ax25Packet.time.ToString("HH:mm:ss"),
@@ -307,7 +320,13 @@ namespace HTCommander.Desktop.TabControls
                 To = to,
                 Type = type,
                 Message = message.Trim(),
-                Visible = isMessage || _showTelemetry
+                Visible = isMessage || _showTelemetry,
+                HasPosition = hasPosition,
+                Latitude = hasPosition ? aprsPacket.Position.CoordinateSet.Latitude.Value : 0,
+                Longitude = hasPosition ? aprsPacket.Position.CoordinateSet.Longitude.Value : 0,
+                HasWeather = hasWeather,
+                AprsPacketData = aprsPacket,
+                AX25PacketData = ax25Packet
             };
 
             allMessages.Add(entry);
@@ -422,6 +441,88 @@ namespace HTCommander.Desktop.TabControls
                 SendAprsButton_Click(sender, e);
                 e.Handled = true;
             }
+        }
+
+        private void AprsDetails_Click(object sender, RoutedEventArgs e)
+        {
+            if (AprsGrid.SelectedItem is not AprsEntry entry) return;
+            var dialog = new Dialogs.AprsDetailsDialog();
+            string source = entry.From;
+            string dest = entry.To;
+            string raw = entry.Message;
+            string path = "";
+            if (entry.AX25PacketData is AX25Packet ax25 && ax25.addresses != null && ax25.addresses.Count > 2)
+            {
+                var pathParts = new List<string>();
+                for (int i = 2; i < ax25.addresses.Count; i++)
+                    pathParts.Add(ax25.addresses[i].ToString());
+                path = string.Join(",", pathParts);
+            }
+            dialog.SetDetails(source, dest, path, entry.Type, raw);
+            dialog.ShowDialog((Window)this.VisualRoot);
+        }
+
+        private void AprsShowLocation_Click(object sender, RoutedEventArgs e)
+        {
+            if (AprsGrid.SelectedItem is not AprsEntry entry || !entry.HasPosition) return;
+            var dialog = new Dialogs.MapLocationDialog();
+            dialog.SetValues(entry.Latitude.ToString("F6"), entry.Longitude.ToString("F6"), entry.From);
+            dialog.ShowDialog((Window)this.VisualRoot);
+        }
+
+        private async void AprsCopyMessage_Click(object sender, RoutedEventArgs e)
+        {
+            if (AprsGrid.SelectedItem is not AprsEntry entry) return;
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard != null) await clipboard.SetTextAsync(entry.Message ?? "");
+        }
+
+        private async void AprsCopyCallsign_Click(object sender, RoutedEventArgs e)
+        {
+            if (AprsGrid.SelectedItem is not AprsEntry entry) return;
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard != null) await clipboard.SetTextAsync(entry.From ?? "");
+        }
+
+        private async void AprsSms_Click(object sender, RoutedEventArgs e)
+        {
+            if (AprsGrid.SelectedItem is not AprsEntry entry) return;
+            var dialog = new Dialogs.AprsSmsDialog();
+            var destBox = dialog.FindControl<TextBox>("DestinationBox");
+            if (destBox != null) destBox.Text = entry.From ?? "";
+            await dialog.ShowDialog((Window)this.VisualRoot);
+            if (dialog.Confirmed && !string.IsNullOrEmpty(dialog.Destination) && !string.IsNullOrEmpty(dialog.Message))
+            {
+                int radioDeviceId = GetPreferredAprsRadioDeviceId();
+                if (radioDeviceId == -1) return;
+                string[] route = null;
+                if (aprsRoutes.Count > 0)
+                {
+                    int idx = RouteCombo.SelectedIndex >= 0 ? RouteCombo.SelectedIndex : 0;
+                    if (idx < aprsRoutes.Count) route = aprsRoutes[idx];
+                }
+                var messageData = new AprsSendMessageData
+                {
+                    Destination = dialog.Destination,
+                    Message = dialog.Message,
+                    RadioDeviceId = radioDeviceId,
+                    Route = route
+                };
+                broker.Dispatch(1, "SendAprsMessage", messageData, store: false);
+            }
+        }
+
+        private void AprsWeather_Click(object sender, RoutedEventArgs e)
+        {
+            if (AprsGrid.SelectedItem is not AprsEntry entry || !entry.HasWeather) return;
+            var dialog = new Dialogs.AprsWeatherDialog();
+            // Extract weather info from the comment/message text
+            dialog.SetWeatherData(entry.From, "", "", "", "", "", "");
+            if (entry.AprsPacketData is AprsPacket aprsPacket && aprsPacket.Comment != null)
+            {
+                dialog.SetWeatherData(entry.From, aprsPacket.Comment, "", "", "", "", "");
+            }
+            dialog.ShowDialog((Window)this.VisualRoot);
         }
 
         #endregion

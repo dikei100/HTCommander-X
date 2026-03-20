@@ -405,7 +405,7 @@ namespace HTCommander
                     tcpClient = null;
                 }
             }
-            catch { }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"WinlinkGatewayRelay.CleanupTcp: {ex.Message}"); }
         }
 
         public void Dispose()

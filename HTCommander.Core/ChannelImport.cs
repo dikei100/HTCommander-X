@@ -29,7 +29,7 @@ namespace HTCommander
                 for (int i = 1; i < lines.Length; i++)
                 {
                     RadioChannelInfo c = null;
-                    try { c = ParseChannel1(lines[i].Split(','), headers); } catch (Exception) { }
+                    try { c = ParseChannel1(lines[i].Split(','), headers); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ChannelImport.ParseChannel1 line {i}: {ex.Message}"); }
                     if (c != null) { importChannels.Add(c); }
                 }
             }
@@ -40,7 +40,7 @@ namespace HTCommander
                 for (int i = 1; i < lines.Length; i++)
                 {
                     RadioChannelInfo c = null;
-                    try { c = ParseChannel2(lines[i].Split(','), headers); } catch (Exception) { }
+                    try { c = ParseChannel2(lines[i].Split(','), headers); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ChannelImport.ParseChannel2 line {i}: {ex.Message}"); }
                     if (c != null) { importChannels.Add(c); }
                 }
             }
@@ -51,7 +51,7 @@ namespace HTCommander
                 for (int i = 1; i < lines.Length; i++)
                 {
                     RadioChannelInfo c = null;
-                    try { c = ParseChannel3(lines[i].Split(','), headers); } catch (Exception) { }
+                    try { c = ParseChannel3(lines[i].Split(','), headers); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ChannelImport.ParseChannel3 line {i}: {ex.Message}"); }
                     if (c != null) { importChannels.Add(c); }
                 }
             }

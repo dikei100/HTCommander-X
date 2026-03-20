@@ -203,8 +203,9 @@ namespace HTCommander
                     // Write header
                     _fileWriter.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [Info] Log file opened: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine($"LogStore.StartFileLogging: {ex.Message}");
                     _fileWriter = null;
                     _logFilePath = null;
                     return false;
@@ -251,7 +252,7 @@ namespace HTCommander
                     _fileWriter.Close();
                     _fileWriter.Dispose();
                 }
-                catch (Exception) { }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"LogStore.StopFileLoggingInternal: {ex.Message}"); }
                 _fileWriter = null;
                 _logFilePath = null;
             }
@@ -324,9 +325,9 @@ namespace HTCommander
                     {
                         _fileWriter.WriteLine(entry.ToString());
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        // Ignore write errors
+                        System.Diagnostics.Debug.WriteLine($"LogStore.OnLogMessage write error: {ex.Message}");
                     }
                 }
             }
