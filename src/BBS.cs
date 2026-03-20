@@ -592,6 +592,15 @@ namespace HTCommander
             if (data != null) { dataStr = UTF8Encoding.UTF8.GetString(data).Replace("\r\n", "\r").Replace("\n", "\r").Split('\r')[0]; }
             if (start) { dataStr = "help"; }
 
+            string gameFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Adventurer", "adv01.dat");
+            if (!File.Exists(gameFilePath))
+            {
+                broker.LogError($"[BBS/{deviceId}] Adventure game data file not found: {gameFilePath}");
+                session.sessionState["mode"] = "bbs";
+                SessionSend(session, "Adventure game data file not found. Returning to BBS.\r[M] for menu.\r");
+                return;
+            }
+
             Adventurer.GameRunner runner = new Adventurer.GameRunner();
 
             string output = runner.RunTurn("adv01.dat", Path.Combine(adventureAppDataPath, session.Addresses[0].CallSignWithId + ".sav"), dataStr).Replace("\r\n\r\n", "\r\n").Trim();
@@ -1033,6 +1042,13 @@ namespace HTCommander
             if (p.pid == 243) { try { dataStr = UTF8Encoding.Default.GetString(Utils.CompressDeflate(p.data)); } catch (Exception) { } }
 
             broker.Dispatch(0, "BbsTraffic", new { DeviceId = deviceId, Callsign = p.addresses[1].ToString(), Outgoing = false, Message = dataStr });
+
+            string gameFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Adventurer", "adv01.dat");
+            if (!File.Exists(gameFilePath))
+            {
+                broker.LogError($"[BBS/{deviceId}] Adventure game data file not found: {gameFilePath}");
+                return;
+            }
 
             Adventurer.GameRunner runner = new Adventurer.GameRunner();
 
