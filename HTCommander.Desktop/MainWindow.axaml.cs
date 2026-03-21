@@ -78,6 +78,10 @@ namespace HTCommander.Desktop
             broker.Subscribe(DataBroker.AllDevices, "AudioState", OnAudioStateChanged);
             broker.Subscribe(0, "SoftwareModemMode", OnSoftwareModemModeChanged);
 
+            // MCP remote control events
+            broker.Subscribe(1, "McpDisconnectRadio", OnMcpDisconnectRadio);
+            broker.Subscribe(1, "McpConnectRadio", OnMcpConnectRadio);
+
             // Init software modem checkbox
             string modemMode = DataBroker.GetValue<string>(0, "SoftwareModemMode", "None");
             SoftwareModemCheck.IsChecked = modemMode != null && modemMode != "None";
@@ -115,6 +119,7 @@ namespace HTCommander.Desktop
             DataBroker.AddDataHandler("CatSerialServer", new CatSerialServer(Program.PlatformServices));
             DataBroker.AddDataHandler("VirtualAudioBridge", new VirtualAudioBridge(Program.PlatformServices));
             DataBroker.AddDataHandler("McpServer", new McpServer());
+            DataBroker.AddDataHandler("WebServer", new WebServer());
         }
 
         private void OnRadioStateChanged(int deviceId, string name, object data)
@@ -557,6 +562,40 @@ namespace HTCommander.Desktop
                 DisconnectRadio(radio);
             }
             ConnectButton.IsEnabled = true;
+        }
+
+        private void OnMcpDisconnectRadio(int deviceId, string name, object data)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (data is int radioDeviceId)
+                {
+                    var radio = connectedRadios.FirstOrDefault(r => r.DeviceId == radioDeviceId);
+                    if (radio != null)
+                    {
+                        DisconnectRadio(radio);
+                        ConnectButton.IsEnabled = true;
+                    }
+                }
+            });
+        }
+
+        private void OnMcpConnectRadio(int deviceId, string name, object data)
+        {
+            Dispatcher.UIThread.Post(async () =>
+            {
+                string macAddress = data as string;
+                if (string.IsNullOrEmpty(macAddress))
+                {
+                    // No MAC address — trigger the normal connect flow (scan dialog)
+                    ConnectButton_Click(null, null);
+                    return;
+                }
+
+                // Connect directly by MAC address
+                var device = new CompatibleDevice("Radio", macAddress);
+                ConnectToRadio(device);
+            });
         }
 
         private int GetNextAvailableDeviceId()

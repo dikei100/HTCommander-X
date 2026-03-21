@@ -14,7 +14,7 @@
     <!-- RuntimeIdentifier is set via -r flag at publish time; don't pre-declare both here
          as it conflicts with the conditional TFM (Windows TFM can't restore for linux-x64) -->
     <ApplicationIcon>..\src\HTCommander.ico</ApplicationIcon>
-    <Version>0.1.0</Version>
+    <Version>0.1.4</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -42,6 +42,10 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\web\**" LinkBase="web" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

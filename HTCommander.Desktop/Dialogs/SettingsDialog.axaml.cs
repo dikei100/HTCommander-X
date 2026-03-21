@@ -513,6 +513,7 @@ namespace HTCommander.Desktop.Dialogs
             if (WebServerCheck.IsChecked == true) ports.Add(("Web Server", (int)(WebPortUpDown.Value ?? 8080)));
             if (AgwpeServerCheck.IsChecked == true) ports.Add(("AGWPE Server", (int)(AgwpePortUpDown.Value ?? 8000)));
             if (RigctldServerCheck.IsChecked == true) ports.Add(("Rigctld Server", (int)(RigctldPortUpDown.Value ?? 4532)));
+            if (McpServerCheck.IsChecked == true) ports.Add(("MCP Server", (int)(McpPortUpDown.Value ?? 5678)));
 
             for (int i = 0; i < ports.Count; i++)
             {

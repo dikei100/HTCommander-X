@@ -216,6 +216,35 @@ namespace HTCommander
 
             tools.Add(new McpToolDefinition
             {
+                Name = "disconnect_radio",
+                Description = "Disconnect a connected radio by device ID.",
+                InputSchema = new McpToolInputSchema
+                {
+                    Type = "object",
+                    Properties = new Dictionary<string, McpToolProperty>
+                    {
+                        ["device_id"] = new McpToolProperty { Type = "integer", Description = "Radio device ID (100+)" }
+                    },
+                    Required = new List<string> { "device_id" }
+                }
+            });
+
+            tools.Add(new McpToolDefinition
+            {
+                Name = "connect_radio",
+                Description = "Connect to a radio by Bluetooth MAC address. If no MAC address is provided, connects to the last used radio.",
+                InputSchema = new McpToolInputSchema
+                {
+                    Type = "object",
+                    Properties = new Dictionary<string, McpToolProperty>
+                    {
+                        ["mac_address"] = new McpToolProperty { Type = "string", Description = "Bluetooth MAC address of the radio (e.g. '38D2000104E2'). If omitted, connects to the last used radio." }
+                    }
+                }
+            });
+
+            tools.Add(new McpToolDefinition
+            {
                 Name = "send_chat_message",
                 Description = "Send a text chat message via the radio's voice handler (text-to-speech transmission).",
                 InputSchema = new McpToolInputSchema
@@ -335,6 +364,8 @@ namespace HTCommander
                     case "set_squelch": return CallSetSquelch(arguments);
                     case "set_audio": return CallSetAudio(arguments);
                     case "set_gps": return CallSetGps(arguments);
+                    case "disconnect_radio": return CallDisconnectRadio(arguments);
+                    case "connect_radio": return CallConnectRadio(arguments);
                     case "send_chat_message": return CallSendChatMessage(arguments);
                     case "get_logs": return CallGetLogs(arguments);
                     case "get_databroker_state": return CallGetDataBrokerState(arguments);
@@ -543,6 +574,24 @@ namespace HTCommander
             bool enabled = GetBoolArg(args, "enabled");
             broker.Dispatch(deviceId, "SetGPS", enabled, store: false);
             return MakeToolResult("GPS " + (enabled ? "enabled" : "disabled"));
+        }
+
+        private object CallDisconnectRadio(JsonElement args)
+        {
+            int deviceId = GetIntArg(args, "device_id");
+            broker.Dispatch(1, "McpDisconnectRadio", deviceId, store: false);
+            return MakeToolResult("Disconnect requested for device " + deviceId);
+        }
+
+        private object CallConnectRadio(JsonElement args)
+        {
+            string macAddress = null;
+            if (args.ValueKind == JsonValueKind.Object && args.TryGetProperty("mac_address", out JsonElement macElem))
+            {
+                macAddress = macElem.GetString();
+            }
+            broker.Dispatch(1, "McpConnectRadio", macAddress ?? "", store: false);
+            return MakeToolResult("Connect requested" + (string.IsNullOrEmpty(macAddress) ? " (last used radio)" : " for " + macAddress));
         }
 
         private object CallSendChatMessage(JsonElement args)

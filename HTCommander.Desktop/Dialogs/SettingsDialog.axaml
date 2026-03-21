@@ -92,6 +92,7 @@
 
             <!-- Servers tab -->
             <TabItem Header="Servers">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="16" Margin="12">
                     <StackPanel Spacing="6">
                         <CheckBox Name="WebServerCheck" Content="Enable Web Server" />
@@ -144,6 +145,7 @@
                     </StackPanel>
                     <TextBlock Name="PortWarning" Text="" Foreground="#F44336" FontSize="11" />
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- Data Sources tab -->

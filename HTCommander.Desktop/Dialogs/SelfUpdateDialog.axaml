@@ -1,21 +1,20 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="HTCommander.Desktop.Dialogs.SelfUpdateDialog"
-        Title="Update Available"
+        Title="Check for Updates"
         Width="450" Height="220"
         CanResize="False"
         WindowStartupLocation="CenterOwner">
     <StackPanel Margin="20" Spacing="12">
-        <TextBlock Text="Update Available" FontSize="16" FontWeight="SemiBold" />
+        <TextBlock Name="TitleText" Text="Checking for Updates..." FontSize="16" FontWeight="SemiBold" />
         <TextBlock Name="VersionInfo" TextWrapping="Wrap"
-                   Text="A new version of HTCommander-X is available." />
-        <ProgressBar Name="DownloadProgress" IsVisible="False" Height="20" />
+                   Text="Contacting GitHub..." />
         <TextBlock Name="StatusText" Foreground="Gray" FontSize="11" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8"
                     Margin="0,8,0,0">
-            <Button Name="UpdateButton" Content="Update Now" Click="UpdateButton_Click"
-                    Padding="16,6" />
-            <Button Content="Later" Click="LaterButton_Click" Padding="16,6" />
+            <Button Name="ViewReleaseButton" Content="View Release" Click="ViewReleaseButton_Click"
+                    Padding="16,6" IsVisible="False" />
+            <Button Content="Close" Click="CloseButton_Click" Padding="16,6" />
         </StackPanel>
     </StackPanel>
 </Window>

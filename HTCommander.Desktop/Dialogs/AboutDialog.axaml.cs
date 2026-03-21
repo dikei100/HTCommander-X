@@ -12,12 +12,17 @@ namespace HTCommander.Desktop.Dialogs
         {
             InitializeComponent();
             var version = Assembly.GetEntryAssembly()?.GetName().Version;
-            VersionText.Text = $"Version: {version?.ToString() ?? "unknown"}";
+            VersionText.Text = $"Version: {version?.Major}.{version?.Minor}.{version?.Build}";
         }
 
         private void GithubLink_Click(object sender, RoutedEventArgs e)
         {
             Program.PlatformServices?.PlatformUtils?.OpenUrl("https://github.com/dikei100/HTCommander-X");
+        }
+
+        private void OriginalGithubLink_Click(object sender, RoutedEventArgs e)
+        {
+            Program.PlatformServices?.PlatformUtils?.OpenUrl("https://github.com/Ylianst/HTCommander");
         }
 
         private void LicenseLink_Click(object sender, RoutedEventArgs e)
