@@ -25,9 +25,9 @@ HTCommander.sln
 ### What's in Core
 - **Radio protocol**: Radio.cs (GAIA protocol), AX25Session, AX25Packet, SoftwareModem
 - **Data models**: RadioSettings, RadioChannelInfo, RadioDevInfo, RadioHtStatus, RadioPosition, etc.
-- **Handlers**: AprsHandler, BbsHandler, VoiceHandler, Torrent, LogStore, PacketStore, FrameDeduplicator, MailStore, WinlinkClient, AirplaneHandler, GpsSerialHandler
-- **Libraries**: hamlib (DSP/modem), sbc (codec), SSTV (image encode/decode), AprsParser, GPS/NMEA, WinLink, Airplanes, Adventurer
-- **Infrastructure**: DataBroker, DataBrokerClient, AppCallbacks, AudioResampler, WavFileWriter, SkiaImageHelper
+- **Handlers**: AprsHandler, BbsHandler, VoiceHandler, Torrent, LogStore, PacketStore, FrameDeduplicator, MailStore, WinlinkClient, AirplaneHandler, GpsSerialHandler, AgwpeServer, AudioClipHandler, RigctldServer, CatSerialServer, VirtualAudioBridge, McpServer, WebServer
+- **Libraries**: hamlib (DSP/modem), sbc (codec), SSTV (image encode/decode), AprsParser, GPS/NMEA, WinLink, Airplanes, Adventurer, DmtfEngine
+- **Infrastructure**: DataBroker, DataBrokerClient, AppCallbacks, AudioResampler, WavFileWriter, SkiaImageHelper, WebAudioBridge, RepeaterBookClient, AdifExport
 
 ### Platform Abstraction Interfaces
 All defined in `Core/Interfaces/`:
@@ -100,38 +100,28 @@ For the WinForms project, `SkiaBitmapConverter` bridges `SKBitmap` ↔ `System.D
 
 ## Linux Bluetooth Implementation
 
-### Strategy: BlueZ ProfileManager1 D-Bus API
+### Strategy: Direct RFCOMM Sockets with GAIA Verification
 
-The Linux BT transport (`LinuxRadioBluetooth`) uses BlueZ's ProfileManager1 to get RFCOMM connections:
+The Linux BT transport (`LinuxRadioBluetooth`) uses direct native RFCOMM sockets:
 
-1. **Register** an SPP profile via `ProfileManager1.RegisterProfile()` with UUID `00001101`
-2. **Connect** via `device.ConnectProfile(SPP_UUID)`
-3. **Receive** file descriptor in `Profile1.NewConnection()` callback
-4. **dup()** the fd before the D-Bus callback returns (critical — Tmds.DBus closes the original)
-5. **Read/write** using native `read()`/`write()` P/Invoke on the fd
+1. **ACL connect** via BlueZ D-Bus (`device.ConnectAsync()`)
+2. **SDP discovery** via `sdptool browse` to find RFCOMM channels (fallback: probe channels 1-30)
+3. **Native RFCOMM socket** per candidate channel — `socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM)` + `connect()`
+4. **GAIA verification**: send `GET_DEV_ID` command, accept only channels that respond with valid `FF 01` GAIA header
+5. **Non-blocking read loop**: `O_NONBLOCK` + `Thread.Sleep(50)` — `poll()` and `SO_RCVTIMEO` do NOT work on RFCOMM sockets (kernel/BlueZ bug)
 
-**Why not ConnectProfile alone?** BlueZ requires a registered profile handler before `ConnectProfile` works for SPP. Without it: `org.bluez.Error.BREDR.ProfileUnavailable`.
+**Critical**: `OnConnected` must fire on a background thread (`ThreadPool.QueueUserWorkItem`) so Radio's ~35 initialization commands don't block the read loop. Without concurrent reads, RFCOMM flow control stalls.
 
-**Why not sdptool?** Deprecated on modern BlueZ 5; requires SDP compatibility daemon which is disabled by default.
-
-**Why dup()?** Tmds.DBus passes the fd as `CloseSafeHandle` which auto-closes when `NewConnection` returns. `dup()` creates a copy we own.
-
-**Why native read()/write() instead of NetworkStream?** .NET's Socket/NetworkStream may not correctly handle raw Bluetooth RFCOMM file descriptors from D-Bus.
-
-**Fallback**: If ProfileManager1 doesn't deliver an fd within 10 seconds, probes channels 1-30 with native RFCOMM sockets, sending a GAIA GET_DEV_ID command and checking for response.
-
-### Current Status (Known Issue)
-
-The BlueZ ProfileManager1 connection succeeds — fd is obtained, validated (correct socket type), and writes succeed. However, the radio does not respond to GAIA commands. The fd socket diagnostics show `domain=AF_BLUETOOTH, type=STREAM, protocol=BTPROTO_RFCOMM` confirming it's a real RFCOMM socket. Investigation is ongoing; the issue may be related to BlueZ's fd handling or the RFCOMM channel selection.
+RFCOMM channel numbers vary by radio model and even between connections (VR-N76 uses channel 1 or 4 for commands, channel 2 for audio). Never hardcode channels.
 
 ## Avalonia Desktop Application
 
-### Tab Controls (10)
+### Tab Controls (11)
 Each tab control is an Avalonia UserControl with DataBroker subscriptions matching the WinForms originals:
-Debug, Contacts, Packets, Terminal, BBS, Mail, Torrent, APRS, Voice, Map
+Communication (Voice), Contacts, Logbook, Packets, Terminal, BBS, Mail, Torrent, APRS, Map, Debug
 
-### Dialogs (39)
-All 39 WinForms dialogs have Avalonia equivalents. Key patterns:
+### Dialogs (45+)
+All WinForms dialogs have Avalonia equivalents, plus new ones (QuickFrequencyDialog, RepeaterBookImportDialog, etc.). Key patterns:
 - `WindowStartupLocation="CenterOwner"`
 - `Confirmed` property pattern for OK/Cancel dialogs
 - `Dispatcher.UIThread.Post()` for broker callback UI updates
@@ -156,6 +146,13 @@ DataBroker.AddDataHandler("MailStore", new MailStore());
 DataBroker.AddDataHandler("WinlinkClient", new WinlinkClient());
 DataBroker.AddDataHandler("AirplaneHandler", new AirplaneHandler());
 DataBroker.AddDataHandler("GpsSerialHandler", new GpsSerialHandler());
+DataBroker.AddDataHandler("AgwpeServer", new AgwpeServer());
+DataBroker.AddDataHandler("AudioClipHandler", new AudioClipHandler());
+DataBroker.AddDataHandler("RigctldServer", new RigctldServer());
+DataBroker.AddDataHandler("CatSerialServer", new CatSerialServer(platformServices));
+DataBroker.AddDataHandler("VirtualAudioBridge", new VirtualAudioBridge());
+DataBroker.AddDataHandler("McpServer", new McpServer());
+DataBroker.AddDataHandler("WebServer", new WebServer());
 ```
 
 ## Linux Packaging

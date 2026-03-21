@@ -26,12 +26,12 @@ All four files are in `HTCommander.Core/Utils/`:
 |------|---------|-------|
 | `McpServer.cs` | Data handler with `HttpListener` lifecycle. Follows the same self-initializing pattern as `RigctldServer.cs`: subscribes to `McpServerEnabled` / `McpServerPort` / `McpDebugToolsEnabled` / `ServerBindAll` on device 0, auto-starts/stops an HTTP listener on the configured port (default 5678). Binds to `localhost` by default; when `ServerBindAll` is 1, binds to all interfaces (`http://*:{port}/`) for LAN access. | ~227 |
 | `McpJsonRpc.cs` | JSON-RPC 2.0 message types (`JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError`) and MCP protocol dispatcher (`McpProtocolHandler`). Routes `initialize`, `tools/list`, `tools/call`, `resources/list`, `resources/read` methods. Also defines MCP data model classes: `McpToolDefinition`, `McpToolInputSchema`, `McpToolProperty`, `McpResourceDefinition`, `McpResourceContent`, `McpToolContent`. | ~270 |
-| `McpTools.cs` | Tool definitions and implementations. Each tool maps to `DataBroker.GetValue()` or `DataBroker.Dispatch()` calls. Contains `GetToolDefinitions()` (returns JSON Schema for each tool) and `CallTool(name, arguments)` (dispatches to the right handler method). | ~490 |
+| `McpTools.cs` | Tool definitions and implementations (39 tools). Each tool maps to `DataBroker.GetValue()` or `DataBroker.Dispatch()` calls. Contains `GetToolDefinitions()` (returns JSON Schema for each tool) and `CallTool(name, arguments)` (dispatches to the right handler method). Includes PTT state management with silence keepalive timer, scratch channel frequency tuning, DTMF PCM generation, and whitelist-validated settings access. | ~1100 |
 | `McpResources.cs` | Resource definitions and readers. Resources are read-only state exposed as JSON. Dynamically lists per-radio resources based on connected radios. Contains `GetResourceDefinitions()` and `ReadResource(uri)`. | ~270 |
 
-### Tools Provided
+### Tools Provided (39 total)
 
-**Radio Query Tools (always available):**
+**Radio Query Tools (8, always available):**
 
 | Tool | Description | DataBroker Access |
 |------|-------------|-------------------|
@@ -44,7 +44,7 @@ All four files are in `HTCommander.Core/Utils/`:
 | `get_battery` | Battery percentage | `GetValue<int>(deviceId, "BatteryAsPercentage")` |
 | `get_ht_status` | Live HT status: RSSI, TX/RX, squelch, scan, GPS lock, current channel | `GetValue<RadioHtStatus>(deviceId, "HtStatus")` |
 
-**Radio Control Tools (always available):**
+**Basic Radio Control Tools (7, always available):**
 
 | Tool | Description | DataBroker Dispatch |
 |------|-------------|---------------------|
@@ -55,16 +55,56 @@ All four files are in `HTCommander.Core/Utils/`:
 | `set_squelch` | Set squelch level (0-9) | `Dispatch(deviceId, "SetSquelchLevel", level)` |
 | `set_audio` | Enable/disable Bluetooth audio streaming | `Dispatch(deviceId, "SetAudio", bool)` |
 | `set_gps` | Enable/disable GPS | `Dispatch(deviceId, "SetGPS", bool)` |
-| `send_chat_message` | Send text chat via voice handler (TTS) | `Dispatch(1, "Chat", message)` |
 
-**Debug Tools (only available when `McpDebugToolsEnabled` is 1):**
+**Extended Radio Control Tools (10, always available):**
+
+| Tool | Description | DataBroker Dispatch |
+|------|-------------|---------------------|
+| `set_vfo_frequency` | Tune VFO A/B to arbitrary frequency via scratch channel (MHz, modulation, bandwidth, power) | Writes `RadioChannelInfo` at `channel_count-1`, dispatches `WriteChannel` + `ChannelChangeVfoA/B` |
+| `set_ptt` | Key/unkey the radio (with 80ms silence keepalive timer) | `Dispatch(1, "ExternalPttState", bool)` + `TransmitVoicePCM` silence frames |
+| `set_dual_watch` | Enable/disable dual watch mode | `Dispatch(deviceId, "DualWatch", bool)` |
+| `set_scan` | Enable/disable scan mode | `Dispatch(deviceId, "Scan", bool)` |
+| `set_output_volume` | Set software output volume (0-100) | `Dispatch(deviceId, "SetOutputVolume", level)` |
+| `set_mute` | Mute/unmute audio output | `Dispatch(deviceId, "SetMute", bool)` |
+| `send_chat_message` | Send text chat via voice handler (TTS) | `Dispatch(1, "Chat", message)` |
+| `send_morse` | Transmit Morse code via voice handler | `Dispatch(1, "Morse", text)` |
+| `send_dtmf` | Transmit DTMF tones (0-9, *, #) — generates PCM via `DmtfEngine` | `DmtfEngine.GenerateDmtfPcm()` → 8-to-16-bit conversion → `Dispatch(deviceId, "TransmitVoicePCM")` |
+| `set_software_modem` | Set software modem mode (None, AFSK1200, PSK2400, PSK4800, G3RUH9600) | `Dispatch(0, "SetSoftwareModemMode", mode)` |
+
+**Audio Clip Tools (4, always available):**
+
+| Tool | Description | DataBroker Access |
+|------|-------------|-------------------|
+| `list_audio_clips` | List all saved WAV clips (name, duration, size) | `GetValue<object>(0, "AudioClips")` |
+| `play_audio_clip` | Play a saved clip over the radio | `Dispatch(deviceId, "PlayAudioClip", clipName)` |
+| `stop_audio_clip` | Stop current clip playback | `Dispatch(deviceId, "StopAudioClip")` |
+| `delete_audio_clip` | Delete a saved clip | `Dispatch(AllDevices, "DeleteAudioClip", clipName)` |
+
+**Channel & Recording Tools (3, always available):**
+
+| Tool | Description | DataBroker Dispatch |
+|------|-------------|---------------------|
+| `write_channel` | Write/edit a channel slot (freq MHz, name, modulation, bandwidth, CTCSS tones, power) | Builds `RadioChannelInfo`, dispatches `WriteChannel` |
+| `enable_recording` | Start recording radio audio to WAV | `Dispatch(deviceId, "RecordingEnable", deviceId)` |
+| `disable_recording` | Stop recording | `Dispatch(deviceId, "RecordingDisable")` |
+
+**Settings Tools (2, always available — whitelist-validated):**
+
+| Tool | Description | Implementation |
+|------|-------------|----------------|
+| `get_setting` | Read a whitelisted application setting | `DataBroker.GetValue(0, name)` — validates name against `SettingsWhitelist` |
+| `set_setting` | Write a whitelisted application setting | `DataBroker.Dispatch(0, name, value)` — validates name, parses int if numeric |
+
+Whitelisted settings: `CallSign`, `StationId`, `AllowTransmit`, `Theme`, `CheckForUpdates`, `VoiceLanguage`, `Voice`, `SpeechToText`, `MicGain`, `OutputVolume`, `ServerBindAll`, `WebServerEnabled`, `WebServerPort`, `McpServerEnabled`, `McpServerPort`, `McpDebugToolsEnabled`, `RigctldServerEnabled`, `RigctldServerPort`, `CatServerEnabled`, `AgwpeServerEnabled`, `AgwpeServerPort`, `VirtualAudioEnabled`, `WinlinkPassword`, `WinlinkUseStationId`, `AirplaneServer`, `RepeaterBookCountry`, `RepeaterBookState`, `ShowAllChannels`, `ShowAirplanesOnMap`, `SoftwareModemMode`, `AudioOutputDevice`, `AudioInputDevice`.
+
+**Debug Tools (5, only available when `McpDebugToolsEnabled` is 1):**
 
 | Tool | Description | Implementation |
 |------|-------------|----------------|
 | `get_logs` | Get recent log entries (up to 500, default 50) | `DataBroker.GetDataHandler<LogStore>("LogStore").GetLogs()` |
 | `get_databroker_state` | Dump all stored values for a device ID | `DataBroker.GetDeviceValues(deviceId)` |
-| `get_app_setting` | Read a specific setting by name from device 0 | `DataBroker.GetValue(0, name)` |
-| `set_app_setting` | Write a setting to device 0 (takes effect immediately) | `DataBroker.Dispatch(0, name, value)` |
+| `get_app_setting` | Read any setting by name from device 0 (unrestricted) | `DataBroker.GetValue(0, name)` |
+| `set_app_setting` | Write any setting to device 0 (unrestricted, use with caution) | `DataBroker.Dispatch(0, name, value)` |
 | `dispatch_event` | Dispatch arbitrary event to DataBroker (advanced) | `DataBroker.Dispatch(deviceId, name, value)` |
 
 ### Resources Provided
