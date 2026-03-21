@@ -24,7 +24,7 @@ namespace HTCommander
         private readonly ConcurrentDictionary<Guid, WebSocket> clients = new ConcurrentDictionary<Guid, WebSocket>();
         private readonly ConcurrentDictionary<Guid, long> clientLastAudioTime = new ConcurrentDictionary<Guid, long>();
         private const int MaxAudioFramesPerSecond = 200; // Rate limit per client
-        private int activeRadioId = -1;
+        private volatile int activeRadioId = -1;
         private Guid? pttOwner = null;
         private Timer pttSilenceTimer;
         private readonly object pttLock = new object();
@@ -216,12 +216,13 @@ namespace HTCommander
             if (pttOwner != clientId) return;
 
             // Rate limit: max audio frames per second per client (minimum 5ms between frames)
+            // Use atomic update to prevent concurrent frames bypassing the rate limit
             long nowTicks = Environment.TickCount64;
-            long lastTicks = clientLastAudioTime.GetOrAdd(clientId, 0);
             long minInterval = 1000 / MaxAudioFramesPerSecond;
             if (minInterval < 1) minInterval = 1;
+            long lastTicks = clientLastAudioTime.GetOrAdd(clientId, 0);
             if (nowTicks - lastTicks < minInterval) return;
-            clientLastAudioTime[clientId] = nowTicks;
+            if (!clientLastAudioTime.TryUpdate(clientId, nowTicks, lastTicks)) return; // Lost race, skip frame
 
             int radioId = activeRadioId;
             if (radioId < 0) radioId = GetFirstConnectedRadioId();

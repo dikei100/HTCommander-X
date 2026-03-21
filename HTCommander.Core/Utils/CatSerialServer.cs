@@ -22,12 +22,12 @@ namespace HTCommander
         private DataBrokerClient broker;
         private IVirtualSerialPort serialPort;
         private IPlatformServices platformServices;
-        private bool running = false;
-        private bool pttActive = false;
+        private volatile bool running = false;
+        private volatile bool pttActive = false;
         private Timer pttSilenceTimer;
-        private long cachedFrequencyA = 145500000;
+        private long cachedFrequencyA = 145500000; // Accessed from multiple threads; reads/writes are non-atomic on 32-bit but acceptable for cached display value
         private long cachedFrequencyB = 145500000;
-        private int activeRadioId = -1;
+        private volatile int activeRadioId = -1;
         private StringBuilder commandBuffer = new StringBuilder();
         private bool autoInfo = false;
 
@@ -315,6 +315,9 @@ namespace HTCommander
 
         private void SetRadioFrequency(long freqHz, string vfo)
         {
+            // Validate frequency fits in int (max ~2.1 GHz) to prevent integer overflow
+            if (freqHz <= 0 || freqHz > int.MaxValue) return;
+
             int radioId = activeRadioId;
             if (radioId < 0) radioId = GetFirstConnectedRadioId();
             if (radioId < 0) return;

@@ -121,6 +121,7 @@ namespace HTCommander.Platform.Linux
 
                 // Set non-blocking mode (same approach as command channel)
                 int flags = NativeMethods.fcntl(rfcommFd, 3 /* F_GETFL */, 0);
+                if (flags < 0) { Debug("fcntl F_GETFL failed on audio fd"); NativeMethods.close(rfcommFd); rfcommFd = -1; return false; }
                 NativeMethods.fcntl(rfcommFd, 4 /* F_SETFL */, flags | 0x800 /* O_NONBLOCK */);
 
                 // Pre-allocate native buffers for read/write to avoid per-call AllocHGlobal
@@ -317,6 +318,8 @@ namespace HTCommander.Platform.Linux
 
         private int CreateRfcommFd(byte[] bdaddr, int channel)
         {
+            if (bdaddr == null || bdaddr.Length < 6) return -1;
+
             int fd = NativeMethods.socket(31, 1, 3); // AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM
             if (fd < 0) return -1;
 

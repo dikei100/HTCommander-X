@@ -37,7 +37,7 @@ namespace HTCommander.AprsParser
             byte[] authCode = Utils.ComputeHmacSha256Hash(authKey, UTF8Encoding.UTF8.GetBytes(minutesSinceEpoch + ":" + srcAddress + ":" + aprsAddr.Trim() + ":" + aprsMessage + "{" + msgId));
             //Console.WriteLine("authHash (hex): " + Utils.BytesToHex(authCode));
             //Console.WriteLine("authHash (base64): " + Convert.ToBase64String(authCode));
-            string authCodeBase64 = Convert.ToBase64String(authCode).Substring(0, 6);
+            string authCodeBase64 = Convert.ToBase64String(authCode).Substring(0, 12);
             //Console.WriteLine("authCodeBase64: " + authCodeBase64);
 
             // Add authentication token to APRS message
@@ -75,7 +75,7 @@ namespace HTCommander.AprsParser
             byte[] authCode = Utils.ComputeHmacSha256Hash(authKey, UTF8Encoding.UTF8.GetBytes(minutesSinceEpoch + ":" + srcAddress + ":" + aprsAddr.Trim() + aprsMessage));
             //Console.WriteLine("authHash (hex): " + Utils.BytesToHex(authCode));
             //Console.WriteLine("authHash (base64): " + Convert.ToBase64String(authCode));
-            string authCodeBase64 = Convert.ToBase64String(authCode).Substring(0, 6);
+            string authCodeBase64 = Convert.ToBase64String(authCode).Substring(0, 12);
             //Console.WriteLine("authCodeBase64: " + authCodeBase64);
 
             // Add authentication token to APRS message
@@ -130,7 +130,7 @@ namespace HTCommander.AprsParser
             for (long x = minutesSinceEpoch; x < (minutesSinceEpoch + 5); x++)
             {
                 //string x1 = x + ":" + srcAddress + ":" + aprsAddr + ":" + aprsMessage + "{" + msgId;
-                string authCodeBase64 = Convert.ToBase64String(Utils.ComputeHmacSha256Hash(authKey, UTF8Encoding.UTF8.GetBytes(x + hashMsg))).Substring(0, 6);
+                string authCodeBase64 = Convert.ToBase64String(Utils.ComputeHmacSha256Hash(authKey, UTF8Encoding.UTF8.GetBytes(x + hashMsg))).Substring(0, 12);
                 if (authCodeBase64Check == authCodeBase64) return AuthState.Success; // Verified authentication
             }
 

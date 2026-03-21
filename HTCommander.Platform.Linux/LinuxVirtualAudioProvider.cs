@@ -242,7 +242,7 @@ namespace HTCommander.Platform.Linux
                 cleanupPsi.ArgumentList.Add("list");
                 cleanupPsi.ArgumentList.Add("short");
                 cleanupPsi.ArgumentList.Add("modules");
-                var process = Process.Start(cleanupPsi);
+                using var process = Process.Start(cleanupPsi);
                 string output = process.StandardOutput.ReadToEnd();
                 process.WaitForExit(5000);
 

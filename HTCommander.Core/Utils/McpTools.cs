@@ -979,11 +979,16 @@ namespace HTCommander
             var info = broker.GetValue<RadioDevInfo>(deviceId, "Info", null);
             if (info == null) return MakeToolError("No radio info available for device " + deviceId);
 
+            // Validate frequency fits in int (max ~2.1 GHz) to prevent integer overflow
+            long freqHz = (long)(freqMhz * 1000000);
+            if (freqHz <= 0 || freqHz > int.MaxValue)
+                return MakeToolError("Frequency out of range (must be between 0 and ~2147 MHz)");
+
             int scratchIndex = info.channel_count - 1;
             var scratch = new RadioChannelInfo();
             scratch.channel_id = scratchIndex;
-            scratch.rx_freq = (int)(freqMhz * 1000000);
-            scratch.tx_freq = (int)(freqMhz * 1000000);
+            scratch.rx_freq = (int)freqHz;
+            scratch.tx_freq = (int)freqHz;
             scratch.rx_mod = ParseModulation(mod);
             scratch.tx_mod = ParseModulation(mod);
             scratch.bandwidth = bw == "narrow" ? Radio.RadioBandwidthType.NARROW : Radio.RadioBandwidthType.WIDE;

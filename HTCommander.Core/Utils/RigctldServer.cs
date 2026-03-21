@@ -31,12 +31,12 @@ namespace HTCommander
         private CancellationTokenSource cts;
         private Task serverTask;
         private int port;
-        private bool running = false;
+        private volatile bool running = false;
         private bool bindAll = false;
-        private bool pttActive = false;
+        private volatile bool pttActive = false;
         private Timer pttSilenceTimer;
-        private long cachedFrequency = 145500000;
-        private int activeRadioId = -1;
+        private long cachedFrequency = 145500000; // Accessed from multiple threads; reads/writes are non-atomic on 32-bit but acceptable for cached display value
+        private volatile int activeRadioId = -1;
 
         public bool PttActive => pttActive;
         public long CachedFrequency => cachedFrequency;
@@ -242,7 +242,7 @@ namespace HTCommander
                     int pttVal = 0;
                     int.TryParse(args, out pttVal);
                     SetPtt(pttVal != 0);
-                    return extended ? $"set_ptt: {pttVal}\nRPRT 0\n" : "RPRT 0\n";
+                    return extended ? $"set_ptt: {pttVal}\nRPRT 0\n" : "RPRT 0\n"; // pttVal is int, safe from injection
                 }
                 case "t":
                 case "\\get_ptt":
@@ -261,7 +261,8 @@ namespace HTCommander
                         cachedFrequency = freq;
                         SetRadioFrequency(freq, "A");
                     }
-                    return extended ? $"set_freq: {args}\nRPRT 0\n" : "RPRT 0\n";
+                    string safeArgs = args?.Replace("\r", "").Replace("\n", "") ?? "";
+                    return extended ? $"set_freq: {safeArgs}\nRPRT 0\n" : "RPRT 0\n";
                 }
 
                 case "m":
@@ -270,7 +271,7 @@ namespace HTCommander
 
                 case "M":
                 case "\\set_mode":
-                    return extended ? $"set_mode: {args}\nRPRT 0\n" : "RPRT 0\n";
+                    { string safeArgs2 = args?.Replace("\r", "").Replace("\n", "") ?? ""; return extended ? $"set_mode: {safeArgs2}\nRPRT 0\n" : "RPRT 0\n"; }
 
                 case "v":
                 case "\\get_vfo":
@@ -278,7 +279,7 @@ namespace HTCommander
 
                 case "V":
                 case "\\set_vfo":
-                    return extended ? $"set_vfo: {args}\nRPRT 0\n" : "RPRT 0\n";
+                    { string safeArgs3 = args?.Replace("\r", "").Replace("\n", "") ?? ""; return extended ? $"set_vfo: {safeArgs3}\nRPRT 0\n" : "RPRT 0\n"; }
 
                 case "s":
                 case "\\get_split_vfo":
@@ -327,6 +328,9 @@ namespace HTCommander
 
         private void SetRadioFrequency(long freqHz, string vfo)
         {
+            // Validate frequency fits in int (max ~2.1 GHz) to prevent integer overflow
+            if (freqHz <= 0 || freqHz > int.MaxValue) return;
+
             int radioId = activeRadioId;
             if (radioId < 0) radioId = GetFirstConnectedRadioId();
             if (radioId < 0) return;

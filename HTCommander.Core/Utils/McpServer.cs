@@ -10,6 +10,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -69,7 +70,7 @@ namespace HTCommander
 
         private static string GenerateApiToken()
         {
-            byte[] tokenBytes = new byte[24];
+            byte[] tokenBytes = new byte[32]; // 256 bits of entropy
             using (var rng = RandomNumberGenerator.Create()) { rng.GetBytes(tokenBytes); }
             return Convert.ToBase64String(tokenBytes);
         }
@@ -206,12 +207,32 @@ namespace HTCommander
 
             // Authenticate: require Bearer token when binding to all interfaces
             bool bindAll = broker.GetValue<int>(0, "ServerBindAll", 0) == 1;
-            if (bindAll && !string.IsNullOrEmpty(apiToken))
+            if (bindAll)
             {
+                string currentToken = apiToken;
+                if (string.IsNullOrEmpty(currentToken))
+                {
+                    // Token not initialized — reject all requests when bind-all is enabled
+                    response.StatusCode = 503;
+                    response.StatusText = "Service Unavailable";
+                    response.ContentType = "application/json";
+                    response.Body = Encoding.UTF8.GetBytes("{\"error\":\"Server not ready\"}");
+                    return response;
+                }
+
                 string authHeader = null;
                 if (request.Headers != null && request.Headers.ContainsKey("Authorization"))
                     authHeader = request.Headers["Authorization"];
-                if (authHeader == null || authHeader != "Bearer " + apiToken)
+
+                // Constant-time comparison to prevent timing attacks
+                string expectedAuth = "Bearer " + currentToken;
+                bool authValid = authHeader != null &&
+                    authHeader.Length == expectedAuth.Length &&
+                    CryptographicOperations.FixedTimeEquals(
+                        Encoding.UTF8.GetBytes(authHeader),
+                        Encoding.UTF8.GetBytes(expectedAuth));
+
+                if (!authValid)
                 {
                     response.StatusCode = 401;
                     response.StatusText = "Unauthorized";

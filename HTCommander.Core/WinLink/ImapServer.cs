@@ -287,7 +287,13 @@ namespace HTCommander
             string pass = parts[1];
             string winlinkPassword = DataBroker.GetValue<string>(0, "WinlinkPassword", "");
 
-            if (IsValidUsername(user) && pass == winlinkPassword)
+            // Use constant-time comparison to prevent timing attacks
+            bool passMatch = !string.IsNullOrEmpty(winlinkPassword) &&
+                pass != null &&
+                System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(pass),
+                    System.Text.Encoding.UTF8.GetBytes(winlinkPassword));
+            if (IsValidUsername(user) && passMatch)
             {
                 authenticated = true;
                 broker.LogInfo($"IMAP: User {user} authenticated");

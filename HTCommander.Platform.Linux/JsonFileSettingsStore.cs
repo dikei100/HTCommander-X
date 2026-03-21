@@ -70,9 +70,11 @@ namespace HTCommander.Platform.Linux
             {
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 string json = JsonSerializer.Serialize(_settings, options);
-                File.WriteAllText(_filePath, json);
-                // Set restrictive file permissions (owner-only read/write) for settings containing credentials
-                try { File.SetUnixFileMode(_filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
+                // Atomic write: write to temp file, set permissions, then rename
+                string tempPath = _filePath + ".tmp";
+                File.WriteAllText(tempPath, json);
+                try { File.SetUnixFileMode(tempPath, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
+                File.Move(tempPath, _filePath, overwrite: true);
             }
             catch (Exception)
             {

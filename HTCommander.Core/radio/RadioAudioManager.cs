@@ -25,11 +25,11 @@ namespace HTCommander
         private readonly IPlatformServices _platformServices;
 
         // Bluetooth audio transport
-        private IRadioAudioTransport transport;
+        private volatile IRadioAudioTransport transport;
         private CancellationTokenSource audioLoopCts;
         private Task audioLoopTask;
-        private bool running = false;
-        private bool isConnecting = false;
+        private volatile bool running = false;
+        private volatile bool isConnecting = false;
         private readonly object connectionLock = new object();
 
         // SBC codec
@@ -41,15 +41,15 @@ namespace HTCommander
         private byte[] pcmFrame = new byte[16000];
 
         // Audio output
-        private IAudioOutput audioOutput;
+        private volatile IAudioOutput audioOutput;
         private float _outputVolume = 1.0f;
-        private bool _isMuted = false;
+        private volatile bool _isMuted = false;
 
         // State
-        private bool _isAudioEnabled = false;
+        private volatile bool _isAudioEnabled = false;
         private bool _disposed = false;
         private DateTime audioRunStartTime;
-        private bool inAudioRun = false;
+        private volatile bool inAudioRun = false;
         private bool inAudioRunIsTransmit = false;
 
         // Recording
@@ -58,12 +58,13 @@ namespace HTCommander
 
         // Voice transmission
         private ConcurrentQueue<byte[]> pcmQueue = new ConcurrentQueue<byte[]>();
-        private bool isTransmitting = false;
+        private volatile bool isTransmitting = false;
         private CancellationTokenSource transmissionTokenSource = null;
         private TaskCompletionSource<bool> newDataAvailable = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly object newDataLock = new object();
         private bool PlayInputBack = false;
         private byte[] ReminderTransmitPcmAudio = null;
-        private bool VoiceTransmitCancel = false;
+        private volatile bool VoiceTransmitCancel = false;
 
         public bool Recording => _recording;
         public bool IsAudioEnabled => _isAudioEnabled;
@@ -462,7 +463,7 @@ namespace HTCommander
             Buffer.BlockCopy(pcmInputData, pcmOffset, pcmSlice, 0, pcmLength);
             pcmQueue.Enqueue(pcmSlice);
 
-            if (isTransmitting) { newDataAvailable.TrySetResult(true); }
+            lock (newDataLock) { newDataAvailable.TrySetResult(true); }
             StartTransmissionIfNeeded();
             return true;
         }
@@ -490,11 +491,12 @@ namespace HTCommander
                         else
                         {
                             Task delayTask = Task.Delay(100, token);
-                            Task signalTask = newDataAvailable.Task;
+                            Task signalTask;
+                            lock (newDataLock) { signalTask = newDataAvailable.Task; }
                             Task completedTask = await Task.WhenAny(delayTask, signalTask);
                             if (completedTask == signalTask)
                             {
-                                newDataAvailable = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                                lock (newDataLock) { newDataAvailable = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously); }
                             }
                             else { break; }
                         }

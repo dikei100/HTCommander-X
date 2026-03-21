@@ -142,12 +142,13 @@ namespace HTCommander
                 while (!ct.IsCancellationRequested)
                 {
                     TcpClient client = await tcpListener.AcceptTcpClientAsync();
-                    if (Interlocked.CompareExchange(ref activeConnections, 0, 0) >= 100)
+                    // Increment first, then check — prevents race where multiple threads pass the check
+                    if (Interlocked.Increment(ref activeConnections) > 100)
                     {
+                        Interlocked.Decrement(ref activeConnections);
                         try { client.Close(); } catch { }
                         continue;
                     }
-                    Interlocked.Increment(ref activeConnections);
                     _ = Task.Run(async () =>
                     {
                         try { await HandleClientAsync(client, ct); }
@@ -418,8 +419,8 @@ namespace HTCommander
                 foreach (var kvp in response.Headers)
                 {
                     // Sanitize header values to prevent header injection via CRLF and null bytes
-                    string safeKey = kvp.Key.Replace("\r", "").Replace("\n", "").Replace("\0", "");
-                    string safeValue = kvp.Value.Replace("\r", "").Replace("\n", "").Replace("\0", "");
+                    string safeKey = kvp.Key.Replace("\r", "").Replace("\n", "").Replace("\0", "").Replace("\u2028", "").Replace("\u2029", "");
+                    string safeValue = kvp.Value.Replace("\r", "").Replace("\n", "").Replace("\0", "").Replace("\u2028", "").Replace("\u2029", "");
                     sb.Append(safeKey);
                     sb.Append(": ");
                     sb.Append(safeValue);

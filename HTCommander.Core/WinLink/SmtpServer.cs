@@ -183,9 +183,14 @@ namespace HTCommander
                     }
 
                     lineBuffer.Clear();
+                    if (bufferedText.Length > 10 * 1024 * 1024 || dataBuffer.Length > 10 * 1024 * 1024)
+                    {
+                        SendResponse("552 Too much data");
+                        return;
+                    }
                     lineBuffer.Append(bufferedText);
 
-                    // Prevent unbounded buffer growth (check before next append)
+                    // Prevent unbounded buffer growth (check after append)
                     if (lineBuffer.Length > 10 * 1024 * 1024 || dataBuffer.Length > 10 * 1024 * 1024)
                     {
                         SendResponse("552 Too much data");
