@@ -17,13 +17,27 @@ namespace HTCommander.Platform.Linux
     {
         public void OpenUrl(string url)
         {
-            try { Process.Start(new ProcessStartInfo("xdg-open", url) { UseShellExecute = false }); }
+            // Validate URL to prevent passing arbitrary arguments to xdg-open
+            if (string.IsNullOrEmpty(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != "http" && uri.Scheme != "https")) return;
+            try
+            {
+                var psi = new ProcessStartInfo("xdg-open") { UseShellExecute = false };
+                psi.ArgumentList.Add(url);
+                Process.Start(psi);
+            }
             catch (Exception) { }
         }
 
         public void OpenFileManager(string path)
         {
-            try { Process.Start(new ProcessStartInfo("xdg-open", path) { UseShellExecute = false }); }
+            if (string.IsNullOrEmpty(path)) return;
+            try
+            {
+                var psi = new ProcessStartInfo("xdg-open") { UseShellExecute = false };
+                psi.ArgumentList.Add(path);
+                Process.Start(psi);
+            }
             catch (Exception) { }
         }
 
@@ -32,7 +46,12 @@ namespace HTCommander.Platform.Linux
             // Try common Bluetooth settings tools
             try { Process.Start(new ProcessStartInfo("blueman-manager") { UseShellExecute = false }); return; }
             catch (Exception) { }
-            try { Process.Start(new ProcessStartInfo("xdg-open", "gnome-bluetooth-panel") { UseShellExecute = false }); }
+            try
+            {
+                var psi = new ProcessStartInfo("xdg-open") { UseShellExecute = false };
+                psi.ArgumentList.Add("gnome-bluetooth-panel");
+                Process.Start(psi);
+            }
             catch (Exception) { }
         }
 

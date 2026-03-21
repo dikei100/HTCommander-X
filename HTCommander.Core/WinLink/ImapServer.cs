@@ -1118,9 +1118,10 @@ namespace HTCommander
 
         private void SendResponse(string tag, string response)
         {
-            // Sanitize tag to prevent IMAP response injection via CRLF and Unicode line separators
+            // Sanitize tag and response to prevent IMAP response injection via CRLF and Unicode line separators
             string safeTag = tag.Replace("\r", "").Replace("\n", "").Replace("\u2028", "").Replace("\u2029", "").Replace("\0", "");
-            string line = $"{safeTag} {response}";
+            string safeResponse = response.Replace("\r", "").Replace("\n", "").Replace("\u2028", "").Replace("\u2029", "").Replace("\0", "");
+            string line = $"{safeTag} {safeResponse}";
             writer.WriteLine(line);
         }
 

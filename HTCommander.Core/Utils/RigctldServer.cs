@@ -256,12 +256,12 @@ namespace HTCommander
                 case "\\set_freq":
                 {
                     long freq;
-                    if (long.TryParse(args, out freq) && freq > 0)
+                    if (long.TryParse(args, out freq) && freq > 0 && freq <= int.MaxValue)
                     {
                         cachedFrequency = freq;
                         SetRadioFrequency(freq, "A");
                     }
-                    string safeArgs = args?.Replace("\r", "").Replace("\n", "") ?? "";
+                    string safeArgs = args?.Replace("\r", "").Replace("\n", "").Replace("\u2028", "").Replace("\u2029", "") ?? "";
                     return extended ? $"set_freq: {safeArgs}\nRPRT 0\n" : "RPRT 0\n";
                 }
 
@@ -271,7 +271,7 @@ namespace HTCommander
 
                 case "M":
                 case "\\set_mode":
-                    { string safeArgs2 = args?.Replace("\r", "").Replace("\n", "") ?? ""; return extended ? $"set_mode: {safeArgs2}\nRPRT 0\n" : "RPRT 0\n"; }
+                    { string safeArgs2 = args?.Replace("\r", "").Replace("\n", "").Replace("\u2028", "").Replace("\u2029", "") ?? ""; return extended ? $"set_mode: {safeArgs2}\nRPRT 0\n" : "RPRT 0\n"; }
 
                 case "v":
                 case "\\get_vfo":
@@ -279,7 +279,7 @@ namespace HTCommander
 
                 case "V":
                 case "\\set_vfo":
-                    { string safeArgs3 = args?.Replace("\r", "").Replace("\n", "") ?? ""; return extended ? $"set_vfo: {safeArgs3}\nRPRT 0\n" : "RPRT 0\n"; }
+                    { string safeArgs3 = args?.Replace("\r", "").Replace("\n", "").Replace("\u2028", "").Replace("\u2029", "") ?? ""; return extended ? $"set_vfo: {safeArgs3}\nRPRT 0\n" : "RPRT 0\n"; }
 
                 case "s":
                 case "\\get_split_vfo":

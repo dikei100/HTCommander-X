@@ -136,9 +136,12 @@ namespace HTCommander
             {
                 int mcpPort = broker.GetValue<int>(0, "McpServerPort", 5678);
                 int mcpEnabled = broker.GetValue<int>(0, "McpServerEnabled", 0);
+                // Include MCP API token so mobile UI can authenticate when ServerBindAll is enabled
+                string mcpToken = broker.GetValue<string>(0, "McpApiToken", "") ?? "";
                 string json = "{\"mcpPort\":" + mcpPort +
                               ",\"mcpEnabled\":" + (mcpEnabled == 1 ? "true" : "false") +
-                              ",\"tlsEnabled\":" + (tlsEnabled ? "true" : "false") + "}";
+                              ",\"tlsEnabled\":" + (tlsEnabled ? "true" : "false") +
+                              (string.IsNullOrEmpty(mcpToken) ? "" : ",\"mcpToken\":\"" + mcpToken.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"") + "}";
                 var resp = new TlsHttpServer.HttpResponse
                 {
                     StatusCode = 200,

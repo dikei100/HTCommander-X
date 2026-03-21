@@ -3,6 +3,7 @@
 
 const state = {
     mcpUrl: null,
+    mcpToken: null,
     deviceId: null,
     connected: false,
     radioInfo: null,
@@ -34,9 +35,11 @@ const state = {
 async function mcpCall(tool, args) {
     if (!state.mcpUrl) return null;
     try {
+        const hdrs = { 'Content-Type': 'application/json' };
+        if (state.mcpToken) hdrs['Authorization'] = 'Bearer ' + state.mcpToken;
         const r = await fetch(state.mcpUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: hdrs,
             body: JSON.stringify({
                 jsonrpc: '2.0',
                 id: Date.now(),
@@ -66,7 +69,12 @@ async function init() {
             showDisconnected('MCP server is not enabled. Enable it in Settings → Servers.');
             return;
         }
+        if (typeof config.mcpPort !== 'number' || config.mcpPort < 1 || config.mcpPort > 65535) {
+            showDisconnected('Invalid MCP server configuration.');
+            return;
+        }
         state.mcpUrl = window.location.protocol + '//' + window.location.hostname + ':' + config.mcpPort;
+        if (config.mcpToken) state.mcpToken = config.mcpToken;
     } catch (e) {
         showDisconnected('Cannot reach HTCommander web server.');
         return;
