@@ -69,6 +69,60 @@ Virtual audio devices allow external software to send and receive audio through 
 
 Note: The free version of VB-CABLE only provides a single virtual cable, which is not sufficient for bidirectional audio routing. The A+B pack provides the two cables needed.
 
+### AI Integration (MCP Server)
+
+HTCommander-X includes a built-in [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server that allows AI assistants like [Claude Code](https://claude.com/claude-code) to control the radio and inspect application state programmatically. This enables scenarios like voice-controlled radio operation, automated monitoring, and AI-assisted debugging.
+
+**Enabling the MCP server:**
+
+1. Open Settings > Servers
+2. Check **"Enable MCP Server (AI Control)"**
+3. Set the port (default: 5678)
+4. Optionally check **"Enable debug tools"** for full DataBroker inspection capabilities
+
+**Connecting Claude Code:**
+
+The project includes a `.mcp.json` file that configures Claude Code to connect automatically. When working in the HTCommander-X directory with Claude Code, the MCP tools become available after enabling the server. You can also add the server manually:
+
+```bash
+claude mcp add htcommander --url http://localhost:5678/
+```
+
+**Available MCP tools:**
+
+| Category | Tools |
+|----------|-------|
+| Radio Queries | `get_connected_radios`, `get_radio_state`, `get_radio_info`, `get_radio_settings`, `get_channels`, `get_gps_position`, `get_battery` |
+| Radio Control | `set_vfo_channel`, `set_volume`, `set_squelch`, `set_audio`, `set_gps`, `send_chat_message` |
+| Debug (opt-in) | `get_logs`, `get_databroker_state`, `get_app_setting`, `set_app_setting`, `dispatch_event` |
+
+**Claude Code Skills:**
+
+Two built-in skills provide guided workflows:
+- `/radio-status` — checks all connected radios and presents a summary
+- `/debug-radio` — inspects logs, state, and connectivity to diagnose issues
+
+**Testing with curl:**
+
+```bash
+# Initialize MCP session
+curl -X POST http://localhost:5678/ \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+
+# List available tools
+curl -X POST http://localhost:5678/ \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+
+# Get connected radios
+curl -X POST http://localhost:5678/ \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_connected_radios","arguments":{}}}'
+```
+
+For full implementation details and removal instructions, see [docs/MCP-Integration.md](docs/MCP-Integration.md).
+
 ### Acknowledgements
 
 - **Ylian Saint-Hilaire** — original [HTCommander](https://github.com/Ylianst/HTCommander) author and maintainer

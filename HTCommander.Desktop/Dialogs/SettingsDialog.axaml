@@ -130,6 +130,18 @@
                         <TextBlock Text="Creates virtual audio devices for external software (requires PulseAudio/PipeWire)."
                                    Foreground="{DynamicResource SecondaryText}" FontSize="11" Margin="24,0,0,0" TextWrapping="Wrap" />
                     </StackPanel>
+                    <StackPanel Spacing="6">
+                        <CheckBox Name="McpServerCheck" Content="Enable MCP Server (AI Control)" />
+                        <Grid ColumnDefinitions="110,*" Margin="24,0,0,0">
+                            <TextBlock Grid.Column="0" Text="Port:" VerticalAlignment="Center" />
+                            <NumericUpDown Name="McpPortUpDown" Grid.Column="1" Width="120"
+                                           Minimum="1" Maximum="65535" Value="5678" HorizontalAlignment="Left" />
+                        </Grid>
+                        <CheckBox Name="McpDebugCheck" Content="Enable debug tools (DataBroker inspection, event dispatch)"
+                                  Margin="24,0,0,0" />
+                        <TextBlock Text="Exposes radio control and state via Model Context Protocol for AI assistants (Claude Code, etc.)."
+                                   Foreground="{DynamicResource SecondaryText}" FontSize="11" Margin="24,0,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
                     <TextBlock Name="PortWarning" Text="" Foreground="#F44336" FontSize="11" />
                 </StackPanel>
             </TabItem>

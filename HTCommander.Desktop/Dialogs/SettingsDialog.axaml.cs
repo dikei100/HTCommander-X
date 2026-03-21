@@ -121,6 +121,9 @@ namespace HTCommander.Desktop.Dialogs
             string catPath = DataBroker.GetValue<string>(1, "CatPortPath", "");
             CatPortLabel.Text = string.IsNullOrEmpty(catPath) ? "" : $"CAT port: {catPath}";
             VirtualAudioCheck.IsChecked = DataBroker.GetValue<int>(0, "VirtualAudioEnabled", 0) == 1;
+            McpServerCheck.IsChecked = DataBroker.GetValue<int>(0, "McpServerEnabled", 0) == 1;
+            McpPortUpDown.Value = DataBroker.GetValue<int>(0, "McpServerPort", 5678);
+            McpDebugCheck.IsChecked = DataBroker.GetValue<int>(0, "McpDebugToolsEnabled", 0) == 1;
 
             // Data Sources
             AirplaneServerBox.Text = DataBroker.GetValue<string>(0, "AirplaneServer", "");
@@ -287,6 +290,9 @@ namespace HTCommander.Desktop.Dialogs
                 DataBroker.Dispatch(0, "CatComPort", CatComPortCombo.SelectedItem?.ToString() ?? "None");
             }
             DataBroker.Dispatch(0, "VirtualAudioEnabled", VirtualAudioCheck.IsChecked == true ? 1 : 0);
+            DataBroker.Dispatch(0, "McpServerEnabled", McpServerCheck.IsChecked == true ? 1 : 0);
+            DataBroker.Dispatch(0, "McpServerPort", (int)(McpPortUpDown.Value ?? 5678));
+            DataBroker.Dispatch(0, "McpDebugToolsEnabled", McpDebugCheck.IsChecked == true ? 1 : 0);
 
             // Data sources
             DataBroker.Dispatch(0, "AirplaneServer", AirplaneServerBox.Text ?? "");

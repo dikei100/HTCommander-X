@@ -114,6 +114,7 @@ namespace HTCommander.Desktop
             DataBroker.AddDataHandler("RigctldServer", new RigctldServer());
             DataBroker.AddDataHandler("CatSerialServer", new CatSerialServer(Program.PlatformServices));
             DataBroker.AddDataHandler("VirtualAudioBridge", new VirtualAudioBridge(Program.PlatformServices));
+            DataBroker.AddDataHandler("McpServer", new McpServer());
         }
 
         private void OnRadioStateChanged(int deviceId, string name, object data)
