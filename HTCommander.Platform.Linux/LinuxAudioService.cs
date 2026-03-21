@@ -290,13 +290,17 @@ namespace HTCommander.Platform.Linux
                 captureProcess = System.Diagnostics.Process.Start(psi);
                 if (captureProcess == null) return;
 
-                capturing = true;
                 captureThread = new System.Threading.Thread(CaptureLoop) { IsBackground = true };
                 captureThread.Start();
+                capturing = true;
             }
             catch (Exception)
             {
-                // parecord not available
+                // parecord not available — clean up partial state
+                capturing = false;
+                try { captureProcess?.Kill(); } catch { }
+                try { captureProcess?.Dispose(); } catch { }
+                captureProcess = null;
             }
         }
 

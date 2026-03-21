@@ -1,7 +1,7 @@
 // sw.js
 const CACHE_NAME = 'htcommander-cache-v1'; // Change version to update cache (e.g., v1.1, v2)
 const URLS_TO_CACHE = [
-    'htcommander.html',
+    'mobile.html',
     // If you add external CSS or JS files later, add their paths here:
     // 'css/style.css',
     // 'js/app.js',
@@ -77,7 +77,7 @@ self.addEventListener('fetch', event => {
                         .then(cachedResponse => {
                             // Fallback to the main cached page if a specific navigation request isn't found
                             // This helps if the user tries to navigate to a sub-page that isn't explicitly cached but ble_radio.html is
-                            return cachedResponse || caches.match('ble_radio.html');
+                            return cachedResponse || caches.match('mobile.html');
                         });
                 })
         );

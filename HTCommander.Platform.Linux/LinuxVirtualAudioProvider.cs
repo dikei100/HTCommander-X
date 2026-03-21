@@ -86,7 +86,18 @@ namespace HTCommander.Platform.Linux
                     RedirectStandardError = false,
                     CreateNoWindow = true
                 };
-                parecordProcess.Start();
+                try
+                {
+                    parecordProcess.Start();
+                }
+                catch
+                {
+                    // Clean up pacat if parecord fails to start
+                    try { pacatProcess.Kill(); } catch { }
+                    try { pacatProcess.Dispose(); } catch { }
+                    pacatProcess = null;
+                    throw;
+                }
 
                 // Start TX read thread
                 running = true;

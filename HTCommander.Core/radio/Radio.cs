@@ -1072,7 +1072,7 @@ namespace HTCommander
                 if (cmd == RadioBasicCommand.GET_DEV_INFO && Info != null) { DispatchRawCommand(Info.raw); return; }
                 if (cmd == RadioBasicCommand.READ_SETTINGS && Settings != null) { DispatchRawCommand(Settings.rawData); return; }
                 if (cmd == RadioBasicCommand.GET_HT_STATUS && HtStatus != null) { DispatchRawCommand(HtStatus.raw); return; }
-                if (cmd == RadioBasicCommand.READ_RF_CH && Channels != null && Channels.Length > rawcmd[4] && Channels[rawcmd[4]] != null)
+                if (cmd == RadioBasicCommand.READ_RF_CH && rawcmd != null && rawcmd.Length > 4 && Channels != null && Channels.Length > rawcmd[4] && Channels[rawcmd[4]] != null)
                 {
                     DispatchRawCommand(Channels[rawcmd[4]].raw);
                     return;

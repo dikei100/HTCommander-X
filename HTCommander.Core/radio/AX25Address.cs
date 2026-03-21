@@ -77,6 +77,7 @@ namespace HTCommander
             last = ((data[index + 6] & 0x01) != 0);
 
             AX25Address addr = AX25Address.GetAddress(address.ToString(), SSID);
+            if (addr == null) return null;
             addr.CRBit1 = ((data[index + 6] & 0x80) != 0);
             addr.CRBit2 = ((data[index + 6] & 0x40) != 0);
             addr.CRBit3 = ((data[index + 6] & 0x20) != 0);

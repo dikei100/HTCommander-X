@@ -515,8 +515,15 @@ namespace HTCommander.Platform.Linux
                 if (fd < 0) continue;
 
                 Debug($"Channel {ch}: connected, testing GAIA...");
-                if (VerifyGaiaResponse(fd, ch))
-                    return fd;
+                try
+                {
+                    if (VerifyGaiaResponse(fd, ch))
+                        return fd;
+                }
+                catch
+                {
+                    // VerifyGaiaResponse failed with exception
+                }
 
                 NativeMethods.close(fd);
             }

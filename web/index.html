@@ -991,6 +991,12 @@
             // log(`Parsed message: ${JSON.stringify(radioMessage)}`);
         }
 
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
         function updateChannels() {
             var html = '', channelCount = 0;
             radioStatusDiv.textContent = '';
@@ -1003,7 +1009,7 @@
                     //channelName = "Channel " + (channel.channel_id + 1);
                 }
                 if (channelName != null) {
-                    html += `<div id="channel${i}" onclick="selectChannel(${i})" class="channelBox">${channelName}</div>`;
+                    html += `<div id="channel${i}" onclick="selectChannel(${i})" class="channelBox">${escapeHtml(channelName)}</div>`;
                     channelCount++;
                 }
             }

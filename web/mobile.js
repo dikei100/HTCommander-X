@@ -44,6 +44,7 @@ async function mcpCall(tool, args) {
                 params: { name: tool, arguments: args || {} }
             })
         });
+        if (!r.ok) return null;
         const j = await r.json();
         if (j.error) { console.error('MCP error:', j.error); return null; }
         const text = j.result && j.result.content && j.result.content[0] && j.result.content[0].text;
@@ -263,7 +264,7 @@ function renderChannelList() {
 
         el.innerHTML =
             '<span class="ch-index">' + ch.index + '</span>' +
-            '<span class="ch-name">' + (ch.name || '--') + '</span>' +
+            '<span class="ch-name">' + escapeHtml(ch.name || '--') + '</span>' +
             '<span class="ch-freq">' + (ch.rx_freq_mhz || 0).toFixed(4) + '</span>';
 
         // Tap = VFO A
@@ -313,7 +314,7 @@ function addChatMessage(from, text) {
     const container = document.getElementById('chatMessages');
     const el = document.createElement('div');
     el.className = 'chat-msg';
-    el.innerHTML = '<span class="time">' + time + '</span><strong>' + from + ':</strong> ' + escapeHtml(text);
+    el.innerHTML = '<span class="time">' + time + '</span><strong>' + escapeHtml(from) + ':</strong> ' + escapeHtml(text);
     container.appendChild(el);
     container.scrollTop = container.scrollHeight;
 }
@@ -429,7 +430,7 @@ function connectAudioWebSocket() {
         setTimeout(connectAudioWebSocket, 3000);
     };
 
-    ws.onerror = () => {}; // onclose will fire after this
+    ws.onerror = (e) => { console.warn('WebSocket error:', e); }; // onclose will fire after this
 }
 
 function playRxAudio(pcmBytes) {

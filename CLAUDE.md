@@ -62,7 +62,7 @@ All radio protocol logic, data handlers, codecs, and parsers. Key subsystems:
 - **Radio.cs**: GAIA protocol over Bluetooth RFCOMM — the central class managing radio connections, commands, channels, GPS
 - **DataBroker / DataBrokerClient**: Global pub/sub event bus. Device-scoped data channels with optional persistence via `ISettingsStore`. Uses `SynchronizationContext.Post()` for UI thread marshalling
 - **Interfaces/**: Platform abstractions (`IPlatformServices`, `IRadioBluetooth`, `IAudioService`, `ISpeechService`, `ISettingsStore`, `IFilePickerService`, `IPlatformUtils`, `IRadioHost`, `IWhisperEngine`, `IVirtualSerialPort`, `IVirtualAudioProvider`)
-- **radio/**: AX.25 packet protocol, SoftwareModem (DSP), GAIA frame encode/decode
+- **radio/**: AX.25 packet protocol, SoftwareModem (DSP), GAIA frame encode/decode. AX25Packet/AX25Address parsers validate bounds before every `data[i++]` access and null-check `GetAddress()` results — always return `null` on malformed input rather than throwing.
 - **SSTV/**: Slow-scan TV image encode/decode using SkiaSharp (not System.Drawing)
 - **VoiceHandler**: Speech processing — takes `ISpeechService` constructor param, uses `VoiceHandler.WhisperEngineFactory` static delegate for STT. Subscribes to `Chat`, `Speak`, `Morse` on AllDevices. Requires `VoiceHandlerEnable` with `{ DeviceId, Language, Model }` before it will transmit — fires when radio State becomes `"Connected"`
 - **RadioAudioManager**: Cross-platform audio pipeline (replaces Windows-only `RadioAudio.cs`). Uses `IRadioAudioTransport` for BT audio socket + `IAudioService` for local playback. Handles `TransmitVoicePCM` → SBC encode → RFCOMM, and receive loop → SBC decode → PortAudio output. Created automatically in `Radio` constructor when `platformServices != null`. Supports recording via `WavFileWriter` — `RecordingEnable`/`RecordingDisable` DataBroker events trigger WAV file recording of decoded PCM to `~/Documents/HTCommander/Recordings/`
@@ -149,6 +149,8 @@ Connection flow: BlueZ D-Bus for ACL connect + device discovery → SDP channel 
 
 RFCOMM channel numbers vary by radio model and even between connections (VR-N76 uses channel 1 or 4 for commands, channel 2 for audio). Never hardcode channels.
 
+**ProbeChannels safety**: `VerifyGaiaResponse()` is wrapped in try-catch so that an exception during GAIA verification doesn't leak the RFCOMM socket file descriptor. The `NativeMethods.close(fd)` call always executes on non-matching channels.
+
 ### Audio pipeline (RadioAudioManager)
 The radio uses a **separate RFCOMM channel** for audio (GenericAudio UUID `00001203`), distinct from the GAIA command channel. `RadioAudioManager` (Core) manages both directions:
 
@@ -162,7 +164,9 @@ The radio uses a **separate RFCOMM channel** for audio (GenericAudio UUID `00001
 
 **Linux audio transport** (`LinuxRadioAudioTransport`): Uses same native RFCOMM socket approach as command channel — `read()`/`write()` P/Invoke with `O_NONBLOCK`, not `NetworkStream` (which fails on RFCOMM fds with "not allowed on non-connected sockets").
 
-**Linux mic capture**: `parecord --format=s16le --rate=48000 --channels=1 --raw --latency-msec=20` — PortAudio's ALSA capture path is broken on PipeWire systems (mmap errors). `parecord` works reliably on PipeWire, PulseAudio, and ALSA.
+**Linux mic capture**: `parecord --format=s16le --rate=48000 --channels=1 --raw --latency-msec=20` — PortAudio's ALSA capture path is broken on PipeWire systems (mmap errors). `parecord` works reliably on PipeWire, PulseAudio, and ALSA. The `capturing` flag is set only after `Thread.Start()` succeeds; on failure the process is killed and disposed.
+
+**VirtualAudioBridge process safety**: `LinuxVirtualAudioProvider.Create()` starts `pacat` then `parecord` sequentially. If `parecord` fails to start, `pacat` is killed and disposed before the exception propagates. The outer catch calls `Destroy()` to clean up PulseAudio modules.
 
 **PTT UI pattern**: Use `Border` with `PointerPressed`/`PointerReleased` (not `Button` — Avalonia `Button` swallows pointer events). Spacebar PTT needs 150ms debounce timer to handle Wayland key repeat (KeyUp+KeyDown pairs). On PTT release, don't cancel buffered audio — let transmission drain naturally.
 
@@ -230,10 +234,10 @@ For programmatic theme-aware colors in code-behind, use `GetThemeBrush(resourceK
 ## Repository Structure
 
 - `docs/CrossPlatformArchitecture.md` — detailed architecture documentation with design decision rationale
-- `packaging/linux/` — AppImage and .deb build scripts
+- `packaging/linux/` — AppImage and .deb build scripts. `build-deb.sh` extracts the version from `HTCommander.Desktop.csproj` automatically.
 - `HTCommander.setup/` — Windows MSI installer project
 - `Updater/` — HtCommanderUpdater project (Windows self-update helper)
-- `web/` — embedded web interface (HTML/JS). `index.html` is the desktop Web Bluetooth UI; `mobile.html` is a mobile-first SPA that uses the MCP JSON-RPC API for remote radio control over LAN (status, VFO display, channel switching, chat, PTT with bidirectional audio via WebSocket)
+- `web/` — embedded web interface (HTML/JS). `index.html` is the desktop Web Bluetooth UI; `mobile.html` is a mobile-first SPA that uses the MCP JSON-RPC API for remote radio control over LAN (status, VFO display, channel switching, chat, PTT with bidirectional audio via WebSocket). **XSS safety**: All user-controlled strings (channel names, callsigns, chat messages) must be passed through `escapeHtml()` before insertion into `innerHTML`. Both `index.html` and `mobile.js` define their own `escapeHtml()` function.
 - `releases/` — Windows MSI release artifacts + `version.txt`
 - Two git remotes: `origin` (Ylianst/HTCommander upstream), `fork` (dikei100/HTCommander-X)
 - Active branch: `main`
