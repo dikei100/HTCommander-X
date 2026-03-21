@@ -11,6 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Net.Sockets;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 
 namespace HTCommander
 {
@@ -21,6 +22,7 @@ namespace HTCommander
         private Thread listenerThread;
         private bool running;
         public readonly int Port;
+        private const int MaxSessions = 10;
         private List<SmtpSession> sessions = new List<SmtpSession>();
 
         public SmtpServer(int port)
@@ -71,6 +73,14 @@ namespace HTCommander
                 try
                 {
                     TcpClient client = listener.AcceptTcpClient();
+                    lock (sessions)
+                    {
+                        if (sessions.Count >= MaxSessions)
+                        {
+                            client.Close();
+                            continue;
+                        }
+                    }
                     SmtpSession session = new SmtpSession(this, client, broker);
                     lock (sessions)
                     {
@@ -224,7 +234,15 @@ namespace HTCommander
                     case "EHLO":
                         HandleHelo(command, args);
                         break;
+                    case "AUTH":
+                        HandleAuth(args);
+                        break;
                     case "MAIL":
+                        if (!authenticated)
+                        {
+                            SendResponse("530 Authentication required");
+                            break;
+                        }
                         HandleMailFrom(args);
                         break;
                     case "RCPT":
@@ -243,7 +261,7 @@ namespace HTCommander
                         HandleQuit();
                         break;
                     default:
-                        SendResponse($"500 Command not recognized: {command}");
+                        SendResponse("500 Command not recognized");
                         break;
                 }
             }
@@ -254,12 +272,15 @@ namespace HTCommander
             }
         }
 
+        private bool authenticated = false;
+
         private void HandleHelo(string command, string args)
         {
             if (command == "EHLO")
             {
                 // RFC 5321 compliant EHLO response with extensions
                 SendResponse("250-localhost");
+                SendResponse("250-AUTH PLAIN");
                 SendResponse("250-8BITMIME");
                 SendResponse("250-SIZE 10240000");
                 SendResponse("250 HELP");
@@ -268,6 +289,59 @@ namespace HTCommander
             {
                 // HELO response
                 SendResponse("250 localhost");
+            }
+        }
+
+        private void HandleAuth(string args)
+        {
+            // AUTH PLAIN <base64> — base64 decodes to \0username\0password
+            string[] authParts = args.Split(new[] { ' ' }, 2);
+            if (authParts.Length < 2 || !authParts[0].Equals("PLAIN", StringComparison.OrdinalIgnoreCase))
+            {
+                SendResponse("504 Unrecognized authentication type");
+                return;
+            }
+
+            try
+            {
+                byte[] decoded = Convert.FromBase64String(authParts[1].Trim());
+                // PLAIN format: \0username\0password
+                string decodedStr = Encoding.UTF8.GetString(decoded);
+                string[] parts2 = decodedStr.Split('\0');
+                // parts2[0] = authorization identity (usually empty), parts2[1] = username, parts2[2] = password
+                string user = parts2.Length > 1 ? parts2[1] : "";
+                string pass = parts2.Length > 2 ? parts2[2] : "";
+
+                if (!IsValidUsername(user))
+                {
+                    SendResponse("535 Authentication failed");
+                    return;
+                }
+
+                string winlinkPassword = DataBroker.GetValue<string>(0, "WinlinkPassword", "") ?? "";
+                if (string.IsNullOrEmpty(winlinkPassword))
+                {
+                    // No password configured — reject authentication
+                    SendResponse("535 Authentication failed");
+                    return;
+                }
+
+                // Constant-time comparison to prevent timing attacks
+                byte[] passBytes = Encoding.UTF8.GetBytes(pass);
+                byte[] expectedBytes = Encoding.UTF8.GetBytes(winlinkPassword);
+                if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(passBytes, expectedBytes))
+                {
+                    authenticated = true;
+                    SendResponse("235 Authentication successful");
+                }
+                else
+                {
+                    SendResponse("535 Authentication failed");
+                }
+            }
+            catch (FormatException)
+            {
+                SendResponse("501 Malformed AUTH data");
             }
         }
 

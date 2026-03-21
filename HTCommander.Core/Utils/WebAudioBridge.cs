@@ -27,6 +27,9 @@ namespace HTCommander
         private volatile int activeRadioId = -1;
         private Guid? pttOwner = null;
         private Timer pttSilenceTimer;
+        private Timer pttTimeoutTimer;
+        private long lastAudioFromPttOwner;
+        private const int PttTimeoutMs = 30000; // Auto-release PTT after 30s of no audio
         private readonly object pttLock = new object();
 
         public WebAudioBridge()
@@ -183,7 +186,9 @@ namespace HTCommander
                 }
 
                 pttOwner = clientId;
+                lastAudioFromPttOwner = Environment.TickCount64;
                 pttSilenceTimer = new Timer(DispatchSilence, null, 0, 80);
+                pttTimeoutTimer = new Timer(CheckPttTimeout, clientId, PttTimeoutMs, PttTimeoutMs);
                 Log("WebSocket PTT ON (client " + clientId.ToString().Substring(0, 8) + ")");
                 broker?.Dispatch(1, "ExternalPttState", true, store: false);
             }
@@ -205,15 +210,39 @@ namespace HTCommander
 
                 pttSilenceTimer?.Dispose();
                 pttSilenceTimer = null;
+                pttTimeoutTimer?.Dispose();
+                pttTimeoutTimer = null;
                 pttOwner = null;
                 Log("WebSocket PTT OFF (client " + clientId.ToString().Substring(0, 8) + ")");
                 broker?.Dispatch(1, "ExternalPttState", false, store: false);
             }
         }
 
+        private void CheckPttTimeout(object state)
+        {
+            Guid clientId = (Guid)state;
+            lock (pttLock)
+            {
+                if (pttOwner != clientId) return;
+                if (Environment.TickCount64 - lastAudioFromPttOwner > PttTimeoutMs)
+                {
+                    Log("WebSocket PTT auto-released (timeout, no audio from client " + clientId.ToString().Substring(0, 8) + ")");
+                    pttSilenceTimer?.Dispose();
+                    pttSilenceTimer = null;
+                    pttTimeoutTimer?.Dispose();
+                    pttTimeoutTimer = null;
+                    pttOwner = null;
+                    broker?.Dispatch(1, "ExternalPttState", false, store: false);
+                }
+            }
+        }
+
         private void HandleAudioData(Guid clientId, byte[] buffer, int count)
         {
             if (pttOwner != clientId) return;
+
+            // Update last audio time for PTT timeout tracking
+            lastAudioFromPttOwner = Environment.TickCount64;
 
             // Rate limit: max audio frames per second per client (minimum 5ms between frames)
             // Use atomic update to prevent concurrent frames bypassing the rate limit
@@ -281,6 +310,8 @@ namespace HTCommander
                 {
                     pttSilenceTimer?.Dispose();
                     pttSilenceTimer = null;
+                    pttTimeoutTimer?.Dispose();
+                    pttTimeoutTimer = null;
                     pttOwner = null;
                     broker?.Dispatch(1, "ExternalPttState", false, store: false);
                 }

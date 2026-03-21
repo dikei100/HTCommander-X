@@ -826,7 +826,11 @@ namespace HTCommander
                     {
                         string filename = reader.GetString(0);
                         string relativePath = reader.GetString(1);
-                        string fullPath = Path.Combine(_attachmentsPath, relativePath);
+                        string fullPath = Path.GetFullPath(Path.Combine(_attachmentsPath, relativePath));
+
+                        // Validate path stays within attachments directory (prevent path traversal from DB)
+                        if (!fullPath.StartsWith(_attachmentsPath + Path.DirectorySeparatorChar) && fullPath != _attachmentsPath)
+                            continue;
 
                         var attachment = new WinLinkMailAttachement { Name = filename };
 
@@ -854,7 +858,12 @@ namespace HTCommander
                     while (reader.Read())
                     {
                         string relativePath = reader.GetString(0);
-                        string fullPath = Path.Combine(_attachmentsPath, relativePath);
+                        string fullPath = Path.GetFullPath(Path.Combine(_attachmentsPath, relativePath));
+
+                        // Validate path stays within attachments directory (prevent path traversal from DB)
+                        if (!fullPath.StartsWith(_attachmentsPath + Path.DirectorySeparatorChar) && fullPath != _attachmentsPath)
+                            continue;
+
                         if (File.Exists(fullPath))
                         {
                             try { File.Delete(fullPath); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"MailStore.DeleteAttachmentFiles: {ex.Message}"); }

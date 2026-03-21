@@ -22,6 +22,7 @@ namespace HTCommander
         private Thread listenerThread;
         private bool running;
         public readonly int Port;
+        private const int MaxSessions = 10;
         private List<ImapSession> sessions = new List<ImapSession>();
 
         public ImapServer(int port)
@@ -72,6 +73,14 @@ namespace HTCommander
                 try
                 {
                     TcpClient client = listener.AcceptTcpClient();
+                    lock (sessions)
+                    {
+                        if (sessions.Count >= MaxSessions)
+                        {
+                            client.Close();
+                            continue;
+                        }
+                    }
                     ImapSession session = new ImapSession(this, client, broker);
                     lock (sessions)
                     {
@@ -140,15 +149,33 @@ namespace HTCommander
             this.writer = new StreamWriter(client.GetStream(), Encoding.UTF8) { AutoFlush = true };
         }
 
+        private const int MaxLineLength = 8192; // Max IMAP command line length
+
+        private string ReadLineLimited()
+        {
+            var sb = new StringBuilder();
+            int ch;
+            while ((ch = reader.Read()) >= 0)
+            {
+                if (ch == '\n') return sb.ToString().TrimEnd('\r');
+                sb.Append((char)ch);
+                if (sb.Length > MaxLineLength) return null; // Line too long
+            }
+            return sb.Length > 0 ? sb.ToString() : null;
+        }
+
         public void Run()
         {
             try
             {
+                // Set read timeout to prevent slowloris-style attacks
+                client.GetStream().ReadTimeout = 30000;
+
                 broker.LogInfo("IMAP: Client connected");
                 writer.WriteLine("* OK HTCommander IMAP Server Ready");
 
                 string line;
-                while ((line = reader.ReadLine()) != null)
+                while ((line = ReadLineLimited()) != null)
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
                     ProcessCommand(line);
@@ -1048,6 +1075,8 @@ namespace HTCommander
             return string.Join(" ", messageFlags[index]);
         }
 
+        private const int MaxSequenceSetResults = 10000;
+
         private List<int> ParseSequenceSet(string sequenceSet)
         {
             List<int> result = new List<int>();
@@ -1055,13 +1084,15 @@ namespace HTCommander
             if (sequenceSet == "*")
             {
                 List<WinLinkMail> mails = GetMailsInMailbox(selectedMailbox);
-                for (int i = 1; i <= mails.Count; i++)
+                for (int i = 1; i <= mails.Count && result.Count < MaxSequenceSetResults; i++)
                     result.Add(i);
                 return result;
             }
 
             foreach (string part in sequenceSet.Split(','))
             {
+                if (result.Count >= MaxSequenceSetResults) break;
+
                 if (part.Contains(':'))
                 {
                     string[] range = part.Split(':');
@@ -1069,7 +1100,9 @@ namespace HTCommander
                     int end;
                     if (range[1] == "*") end = GetMailsInMailbox(selectedMailbox).Count;
                     else if (!int.TryParse(range[1], out end)) continue;
-                    for (int i = start; i <= end; i++)
+                    // Cap range to prevent CPU DoS
+                    if (end - start > MaxSequenceSetResults) end = start + MaxSequenceSetResults;
+                    for (int i = start; i <= end && result.Count < MaxSequenceSetResults; i++)
                         result.Add(i);
                 }
                 else

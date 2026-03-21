@@ -280,9 +280,19 @@ namespace HTCommander
             var ch = new RadioChannelInfo();
             ch.channel_id = channelSlot;
 
-            // Frequency: API Frequency = repeater output = user RX
-            ch.rx_freq = (int)Math.Round(entry.Frequency * 1000000);
-            ch.tx_freq = entry.InputFreq > 0 ? (int)Math.Round(entry.InputFreq * 1000000) : ch.rx_freq;
+            // Frequency: API Frequency = repeater output = user RX (with overflow protection)
+            long rxHz = (long)Math.Round(entry.Frequency * 1000000);
+            if (rxHz <= 0 || rxHz > int.MaxValue) return null;
+            ch.rx_freq = (int)rxHz;
+            if (entry.InputFreq > 0)
+            {
+                long txHz = (long)Math.Round(entry.InputFreq * 1000000);
+                ch.tx_freq = (txHz > 0 && txHz <= int.MaxValue) ? (int)txHz : ch.rx_freq;
+            }
+            else
+            {
+                ch.tx_freq = ch.rx_freq;
+            }
             if (ch.rx_freq == 0) return null;
 
             // Mode and bandwidth

@@ -74,7 +74,7 @@ namespace HTCommander
             if (with_channel_id) { channel_id = msg[msg.Length - 1]; } else { channel_id = -1; }
         }
 
-        private const int MaxReassemblySize = 1024 * 1024; // 1MB cap on reassembled fragments
+        private const int MaxReassemblySize = 64 * 1024; // 64KB cap on reassembled fragments (AX.25 frames are typically < 330 bytes)
 
         public TncDataFragment Append(TncDataFragment frame)
         {

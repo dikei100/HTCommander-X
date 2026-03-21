@@ -22,8 +22,8 @@ namespace HTCommander.Platform.Linux
     public class LinuxRadioAudioTransport : IRadioAudioTransport
     {
         private int rfcommFd = -1;
-        private bool _isConnected = false;
-        private bool _disposed = false;
+        private volatile bool _isConnected = false;
+        private volatile bool _disposed = false;
 
         private const string GENERIC_AUDIO_UUID = "00001203-0000-1000-8000-00805f9b34fb";
         private const int NativeBufferSize = 4096;
@@ -186,6 +186,7 @@ namespace HTCommander.Platform.Linux
         public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             if (rfcommFd < 0 || !_isConnected) return Task.CompletedTask;
+            if (buffer == null || offset < 0 || count < 0 || offset + count > buffer.Length) return Task.CompletedTask;
 
             return Task.Run(() =>
             {

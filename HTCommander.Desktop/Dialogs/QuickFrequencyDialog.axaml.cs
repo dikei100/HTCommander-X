@@ -108,7 +108,13 @@ namespace HTCommander.Desktop.Dialogs
                 return;
             }
 
-            FrequencyHz = (int)(freqMhz * 1000000);
+            long freqHz = (long)(freqMhz * 1000000);
+            if (freqHz <= 0 || freqHz > int.MaxValue)
+            {
+                FrequencyBox.Focus();
+                return;
+            }
+            FrequencyHz = (int)freqHz;
             Modulation = (RadioModulationType)ModeCombo.SelectedIndex;
             Bandwidth = BandwidthCombo.SelectedIndex == 1 ? RadioBandwidthType.WIDE : RadioBandwidthType.NARROW;
             PowerLevel = PowerCombo.SelectedIndex;

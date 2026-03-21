@@ -20,12 +20,18 @@ namespace HTCommander.Platform.Windows
 
         public void OpenUrl(string url)
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            // Validate URL scheme to prevent command execution via shell
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri)) return;
+            if (uri.Scheme != "http" && uri.Scheme != "https") return;
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
         }
 
         public void OpenFileManager(string path)
         {
-            Process.Start("explorer.exe", path);
+            // Use ArgumentList to prevent argument injection
+            var psi = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+            psi.ArgumentList.Add(path);
+            Process.Start(psi);
         }
 
         public void OpenBluetoothSettings()

@@ -178,6 +178,7 @@ namespace HTCommander
         public static byte[] DecompressBrotli(byte[] compressedData) => DecompressBrotli(compressedData, 0, compressedData.Length);
 
         private const int MaxDecompressedSize = 100 * 1024 * 1024; // 100MB decompression limit
+        private const int MaxCompressionRatio = 100; // Reject if decompressed/compressed > 100:1
 
         public static byte[] DecompressBrotli(byte[] compressedData, int index, int length)
         {
@@ -192,6 +193,8 @@ namespace HTCommander
                     output.Write(buf, 0, read);
                     if (output.Length > MaxDecompressedSize)
                         throw new InvalidOperationException("Decompressed data exceeds size limit");
+                    if (length > 0 && output.Length > (long)length * MaxCompressionRatio)
+                        throw new InvalidOperationException("Decompression ratio exceeds limit");
                 }
                 return output.ToArray();
             }
@@ -221,6 +224,8 @@ namespace HTCommander
                     output.Write(buf, 0, read);
                     if (output.Length > MaxDecompressedSize)
                         throw new InvalidOperationException("Decompressed data exceeds size limit");
+                    if (length > 0 && output.Length > (long)length * MaxCompressionRatio)
+                        throw new InvalidOperationException("Decompression ratio exceeds limit");
                 }
                 return output.ToArray();
             }

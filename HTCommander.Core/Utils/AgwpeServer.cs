@@ -177,7 +177,7 @@ namespace HTCommander
                 listener.Start();
                 running = true;
                 serverTask = Task.Run(() => AcceptClientsAsync(cts.Token), cts.Token);
-                Log($"AGWPE server started on port {port}" + (bindAll ? " (all interfaces)" : " (loopback only)"));
+                Log($"AGWPE server started on port {port}" + (bindAll ? " (all interfaces - WARNING: no authentication, any LAN client can send packets)" : " (loopback only)"));
             }
             catch (Exception ex)
             {
@@ -212,6 +212,8 @@ namespace HTCommander
             Log("AGWPE server stopped");
         }
 
+        private const int MaxClients = 20;
+
         private async Task AcceptClientsAsync(CancellationToken ct)
         {
             try
@@ -219,6 +221,12 @@ namespace HTCommander
                 while (!ct.IsCancellationRequested)
                 {
                     TcpClient tcpClient = await listener.AcceptTcpClientAsync();
+                    if (clients.Count >= MaxClients)
+                    {
+                        Log("AGWPE connection rejected: max clients reached");
+                        tcpClient.Close();
+                        continue;
+                    }
                     var handler = new AgwpeTcpClientHandler(tcpClient, this);
                     if (clients.TryAdd(handler.Id, handler))
                     {

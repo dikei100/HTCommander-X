@@ -58,7 +58,7 @@ namespace HTCommander
 
         // Voice transmission
         private ConcurrentQueue<byte[]> pcmQueue = new ConcurrentQueue<byte[]>();
-        private volatile bool isTransmitting = false;
+        private int _isTransmitting = 0; // 0=false, 1=true; use Interlocked for atomic check-then-act
         private CancellationTokenSource transmissionTokenSource = null;
         private TaskCompletionSource<bool> newDataAvailable = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object newDataLock = new object();
@@ -470,10 +470,10 @@ namespace HTCommander
 
         private void StartTransmissionIfNeeded()
         {
-            if (isTransmitting) return;
+            // Atomic check-then-act to prevent double transmission start
+            if (Interlocked.CompareExchange(ref _isTransmitting, 1, 0) != 0) return;
 
             Debug("Starting voice transmission...");
-            isTransmitting = true;
             transmissionTokenSource = new CancellationTokenSource();
             CancellationToken token = transmissionTokenSource.Token;
 
@@ -525,7 +525,7 @@ namespace HTCommander
                 {
                     DispatchVoiceTransmitStateChanged(false);
                     Debug("Voice transmission stopped.");
-                    isTransmitting = false;
+                    Interlocked.Exchange(ref _isTransmitting, 0);
                 }
             }, token);
         }
@@ -783,6 +783,7 @@ namespace HTCommander
 
         private static unsafe byte[] EscapeBytes(byte cmd, byte[] b, int len)
         {
+            if (len < 0 || len > 1024 * 1024) return null; // Guard against overflow
             int maxLen = 2 + len * 2;
             byte[] result = new byte[maxLen];
             fixed (byte* bPtr = b)

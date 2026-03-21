@@ -58,7 +58,7 @@ namespace HTCommander
 
         private static X509Certificate2 GenerateAndSave(string pfxPath)
         {
-            using (var rsa = RSA.Create(2048))
+            using (var rsa = RSA.Create(3072))
             {
                 var req = new CertificateRequest(
                     "CN=HTCommander",

@@ -20,7 +20,7 @@ namespace HTCommander.Platform.Windows
     public class RadioBluetoothWin : IRadioBluetooth
     {
         private IRadioHost parent;
-        private bool running = false;
+        private volatile bool running = false;
         private StreamSocket bluetoothSocket = null;
         private RfcommDeviceService rfcommService = null;
         private Stream inputStream = null;
@@ -28,7 +28,7 @@ namespace HTCommander.Platform.Windows
         private CancellationTokenSource connectionCts = null;
         private readonly object connectionLock = new object();
         private Task connectionTask = null;
-        private bool isConnecting = false;
+        private volatile bool isConnecting = false;
         private bool _disposed = false;
 
         public event Action OnConnected;

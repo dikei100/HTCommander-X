@@ -94,23 +94,34 @@ namespace HTCommander.Platform.Linux
 
                 try
                 {
-                    // Remove existing symlink/file atomically — delete then create
-                    // Verify that if a file exists at the target, it is a symlink (not a regular file)
-                    var linkInfo = new FileInfo(symlinkPath);
-                    if (linkInfo.Exists || Directory.Exists(symlinkPath))
+                    // Atomic symlink replacement: create temp symlink then rename
+                    // This eliminates the TOCTOU window between delete and create
+                    string tempLink = symlinkPath + "." + Guid.NewGuid().ToString("N").Substring(0, 8);
+                    try
                     {
+                        File.CreateSymbolicLink(tempLink, slavePath);
+                        // Atomic rename — overwrites existing symlink
+                        File.Move(tempLink, symlinkPath, overwrite: true);
+                    }
+                    catch
+                    {
+                        // Cleanup temp if rename failed
+                        try { File.Delete(tempLink); } catch { }
+
+                        // Fallback: verify existing file is a symlink before deleting
+                        var linkInfo = new FileInfo(symlinkPath);
                         if (linkInfo.Exists && (linkInfo.Attributes & FileAttributes.ReparsePoint) == 0)
                         {
-                            // Not a symlink — refuse to delete a regular file (potential attack)
+                            // Not a symlink — refuse to delete a regular file
                             symlinkPath = slavePath;
                         }
                         else
                         {
-                            File.Delete(symlinkPath);
+                            if (linkInfo.Exists) File.Delete(symlinkPath);
+                            if (symlinkPath != slavePath)
+                                File.CreateSymbolicLink(symlinkPath, slavePath);
                         }
                     }
-                    if (symlinkPath != slavePath)
-                        File.CreateSymbolicLink(symlinkPath, slavePath);
                 }
                 catch
                 {

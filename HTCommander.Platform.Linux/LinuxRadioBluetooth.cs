@@ -24,12 +24,12 @@ namespace HTCommander.Platform.Linux
     public class LinuxRadioBluetooth : IRadioBluetooth
     {
         private IRadioHost parent;
-        private bool running = false;
+        private volatile bool running = false;
         private int rfcommFd = -1;
         private CancellationTokenSource connectionCts = null;
         private readonly object connectionLock = new object();
         private Task connectionTask = null;
-        private bool isConnecting = false;
+        private volatile bool isConnecting = false;
         private bool _disposed = false;
 
         public event Action OnConnected;
@@ -408,7 +408,8 @@ namespace HTCommander.Platform.Linux
                 // Look for RFCOMM channel number
                 var channelMatch = Regex.Match(record, @"Channel:\s*(\d+)");
                 if (!channelMatch.Success) continue;
-                int channel = int.Parse(channelMatch.Groups[1].Value);
+                if (!int.TryParse(channelMatch.Groups[1].Value, out int channel)) continue;
+                if (channel < 1 || channel > 30) continue; // Valid RFCOMM channels are 1-30
 
                 // Check if this is an SPP service (command channel)
                 bool isSpp = record.Contains("SPP Dev") ||

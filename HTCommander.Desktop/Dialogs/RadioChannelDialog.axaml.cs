@@ -161,13 +161,19 @@ namespace HTCommander.Desktop.Dialogs
             // Build updated channel
             var updated = new RadioChannelInfo(originalInfo);
 
-            // Parse frequency
+            // Parse frequency with overflow protection
             if (double.TryParse(FrequencyBox.Text, out double freqMhz))
             {
-                updated.rx_freq = (int)(freqMhz * 1000000);
+                long rxHz = (long)(freqMhz * 1000000);
+                if (rxHz <= 0 || rxHz > int.MaxValue) { FrequencyBox.Focus(); return; }
+                updated.rx_freq = (int)rxHz;
                 // If advanced TX frequency wasn't changed separately, keep TX = RX
                 if (double.TryParse(TxFrequencyBox.Text, out double txMhz))
-                    updated.tx_freq = (int)(txMhz * 1000000);
+                {
+                    long txHz = (long)(txMhz * 1000000);
+                    if (txHz <= 0 || txHz > int.MaxValue) { TxFrequencyBox.Focus(); return; }
+                    updated.tx_freq = (int)txHz;
+                }
                 else
                     updated.tx_freq = updated.rx_freq;
             }

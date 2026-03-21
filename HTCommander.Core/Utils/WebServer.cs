@@ -136,8 +136,27 @@ namespace HTCommander
             {
                 int mcpPort = broker.GetValue<int>(0, "McpServerPort", 5678);
                 int mcpEnabled = broker.GetValue<int>(0, "McpServerEnabled", 0);
-                // Include MCP API token so mobile UI can authenticate when ServerBindAll is enabled
+                int bindAllSetting = broker.GetValue<int>(0, "ServerBindAll", 0);
+
+                // When ServerBindAll is enabled, require Bearer token to access config (which includes mcpToken)
                 string mcpToken = broker.GetValue<string>(0, "McpApiToken", "") ?? "";
+                if (bindAllSetting == 1 && !string.IsNullOrEmpty(mcpToken))
+                {
+                    string authHeader = request.Headers != null && request.Headers.ContainsKey("Authorization") ? request.Headers["Authorization"] : null;
+                    bool authValid = false;
+                    if (authHeader != null && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string providedToken = authHeader.Substring(7).Trim();
+                        byte[] providedBytes = Encoding.UTF8.GetBytes(providedToken);
+                        byte[] expectedBytes = Encoding.UTF8.GetBytes(mcpToken);
+                        authValid = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes);
+                    }
+                    if (!authValid)
+                    {
+                        return new TlsHttpServer.HttpResponse(401, "401 - Unauthorized");
+                    }
+                }
+
                 string json = "{\"mcpPort\":" + mcpPort +
                               ",\"mcpEnabled\":" + (mcpEnabled == 1 ? "true" : "false") +
                               ",\"tlsEnabled\":" + (tlsEnabled ? "true" : "false") +

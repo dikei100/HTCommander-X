@@ -180,10 +180,12 @@ namespace HTCommander
 
             string xdataStr = null;
             byte[] xdata = null;
-            if (data.Length > i) {
-                xdataStr = UTF8Encoding.UTF8.GetString(data, i, data.Length - i);
-                xdata = new byte[data.Length - i];
-                Array.Copy(data, i, xdata, 0, data.Length - i);
+            int payloadLen = data.Length - i;
+            if (payloadLen > 65536) return null; // Reject unreasonably large payloads
+            if (payloadLen > 0) {
+                xdataStr = UTF8Encoding.UTF8.GetString(data, i, payloadLen);
+                xdata = new byte[payloadLen];
+                Array.Copy(data, i, xdata, 0, payloadLen);
             }
             AX25Packet packet = new AX25Packet(addresses, xdataStr, frame.time);
             packet.data = xdata;

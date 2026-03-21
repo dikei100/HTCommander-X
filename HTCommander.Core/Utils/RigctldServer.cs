@@ -129,7 +129,7 @@ namespace HTCommander
                 listener.Start();
                 running = true;
                 serverTask = Task.Run(() => AcceptClientsAsync(cts.Token), cts.Token);
-                Log($"Rigctld server started on port {port}" + (bindAll ? " (all interfaces)" : " (loopback only)"));
+                Log($"Rigctld server started on port {port}" + (bindAll ? " (all interfaces - WARNING: no authentication, any LAN client can control PTT and frequency)" : " (loopback only)"));
             }
             catch (Exception ex)
             {

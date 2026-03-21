@@ -667,16 +667,16 @@ namespace HTCommander
             {
                 var genericTypeDef = type.GetGenericTypeDefinition();
                 var genericArgs = type.GetGenericArguments();
-                string baseName = genericTypeDef.Name;
+                string baseName = genericTypeDef.FullName ?? genericTypeDef.Name;
                 int backtickIndex = baseName.IndexOf('`');
                 if (backtickIndex > 0)
                 {
                     baseName = baseName.Substring(0, backtickIndex);
                 }
-                string argNames = string.Join(",", Array.ConvertAll(genericArgs, t => t.Name));
+                string argNames = string.Join(",", Array.ConvertAll(genericArgs, t => t.FullName ?? t.Name));
                 return $"{baseName}<{argNames}>";
             }
-            return type.Name;
+            return type.FullName ?? type.Name;
         }
     }
 }
