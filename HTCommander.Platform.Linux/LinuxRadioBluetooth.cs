@@ -672,6 +672,8 @@ namespace HTCommander.Platform.Linux
 
         private int CreateRfcommFd(byte[] bdaddr, int channel)
         {
+            if (bdaddr == null || bdaddr.Length < 6) return -1;
+
             int fd = NativeMethods.socket(31, 1, 3); // AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM
             if (fd < 0) return -1;
 

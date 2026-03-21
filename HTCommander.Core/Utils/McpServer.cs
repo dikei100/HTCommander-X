@@ -160,10 +160,12 @@ namespace HTCommander
         {
             var response = new TlsHttpServer.HttpResponse();
 
-            // CORS: restrict to same-origin requests via required custom header
-            response.Headers["Access-Control-Allow-Origin"] = request.Headers != null && request.Headers.ContainsKey("Origin") ? request.Headers["Origin"] : "null";
+            // CORS: validate origin against allowlist
+            string origin = request.Headers != null && request.Headers.ContainsKey("Origin") ? request.Headers["Origin"] : null;
+            string allowedOrigin = ValidateCorsOrigin(origin);
+            response.Headers["Access-Control-Allow-Origin"] = allowedOrigin ?? "null";
             response.Headers["Access-Control-Allow-Methods"] = "POST, OPTIONS";
-            response.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-MCP-Auth";
+            response.Headers["Access-Control-Allow-Headers"] = "Content-Type, X-MCP-Auth, Authorization";
             response.Headers["Vary"] = "Origin";
 
             // Handle preflight
@@ -232,6 +234,27 @@ namespace HTCommander
                 response.Body = Encoding.UTF8.GetBytes("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32603,\"message\":\"Internal server error\"}}");
                 return response;
             }
+        }
+
+        /// <summary>
+        /// Validates a CORS origin against allowed patterns (localhost/loopback origins).
+        /// Returns the origin if valid, null otherwise.
+        /// </summary>
+        private static string ValidateCorsOrigin(string origin)
+        {
+            if (string.IsNullOrEmpty(origin)) return null;
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out Uri uri)) return null;
+            string host = uri.Host;
+            if (host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]") return origin;
+            // Allow LAN IPs (private ranges) for ServerBindAll scenarios
+            if (System.Net.IPAddress.TryParse(host, out var ip))
+            {
+                byte[] bytes = ip.GetAddressBytes();
+                if (bytes.Length == 4 &&
+                    (bytes[0] == 10 || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) || (bytes[0] == 192 && bytes[1] == 168)))
+                    return origin;
+            }
+            return null;
         }
 
         private void Log(string message)

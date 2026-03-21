@@ -22,6 +22,8 @@ namespace HTCommander
     {
         private DataBrokerClient broker;
         private readonly ConcurrentDictionary<Guid, WebSocket> clients = new ConcurrentDictionary<Guid, WebSocket>();
+        private readonly ConcurrentDictionary<Guid, long> clientLastAudioTime = new ConcurrentDictionary<Guid, long>();
+        private const int MaxAudioFramesPerSecond = 200; // Rate limit per client
         private int activeRadioId = -1;
         private Guid? pttOwner = null;
         private Timer pttSilenceTimer;
@@ -213,6 +215,12 @@ namespace HTCommander
         {
             if (pttOwner != clientId) return;
 
+            // Rate limit: max audio frames per second per client
+            long nowTicks = Environment.TickCount64;
+            long lastTicks = clientLastAudioTime.GetOrAdd(clientId, 0);
+            if (nowTicks - lastTicks < (1000 / MaxAudioFramesPerSecond)) return;
+            clientLastAudioTime[clientId] = nowTicks;
+
             int radioId = activeRadioId;
             if (radioId < 0) radioId = GetFirstConnectedRadioId();
             if (radioId < 0) return;
@@ -221,7 +229,7 @@ namespace HTCommander
             {
                 // Extract PCM data (skip command byte)
                 int pcmLength = count - 1;
-                if (pcmLength <= 0) return;
+                if (pcmLength <= 0 || pcmLength > 19200) return; // Cap at 100ms of 48kHz stereo 16-bit
 
                 byte[] pcm48 = new byte[pcmLength];
                 Array.Copy(buffer, 1, pcm48, 0, pcmLength);

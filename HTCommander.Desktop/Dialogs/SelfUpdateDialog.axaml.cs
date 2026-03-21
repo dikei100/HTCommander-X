@@ -91,7 +91,11 @@ namespace HTCommander.Desktop.Dialogs
 
         private void ViewReleaseButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!string.IsNullOrEmpty(_releaseUrl) && _releaseUrl.StartsWith("https://github.com/"))
+            if (!string.IsNullOrEmpty(_releaseUrl) &&
+                Uri.TryCreate(_releaseUrl, UriKind.Absolute, out Uri releaseUri) &&
+                releaseUri.Scheme == "https" &&
+                releaseUri.Host == "github.com" &&
+                releaseUri.AbsolutePath.StartsWith("/dikei100/HTCommander-X/releases/"))
             {
                 Program.PlatformServices?.PlatformUtils?.OpenUrl(_releaseUrl);
             }

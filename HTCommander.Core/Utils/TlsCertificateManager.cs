@@ -31,7 +31,7 @@ namespace HTCommander
                 {
                     try
                     {
-                        var cert = X509CertificateLoader.LoadPkcs12FromFile(pfxPath, null, X509KeyStorageFlags.Exportable);
+                        var cert = X509CertificateLoader.LoadPkcs12FromFile(pfxPath, null, X509KeyStorageFlags.EphemeralKeySet);
                         if (cert.NotAfter > DateTime.UtcNow)
                         {
                             cachedCert = cert;
@@ -124,7 +124,7 @@ namespace HTCommander
                 // Set restrictive file permissions on Linux/macOS (owner-only read/write)
                 try { File.SetUnixFileMode(pfxPath, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
 
-                return X509CertificateLoader.LoadPkcs12(pfxBytes, null, X509KeyStorageFlags.Exportable);
+                return X509CertificateLoader.LoadPkcs12(pfxBytes, null, X509KeyStorageFlags.EphemeralKeySet);
             }
         }
     }

@@ -1292,6 +1292,12 @@ namespace HTCommander
             return MakeToolResult(name + " = " + value.ToString());
         }
 
+        // Critical settings that must never be modified via debug tools
+        private static readonly HashSet<string> DebugSettingsBlacklist = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "McpApiToken", "McpDebugToolsEnabled", "TlsEnabled"
+        };
+
         private object CallSetAppSetting(JsonElement args)
         {
             if (broker.GetValue<int>(0, "McpDebugToolsEnabled", 0) != 1)
@@ -1299,6 +1305,9 @@ namespace HTCommander
 
             string name = GetStringArg(args, "name");
             string value = GetStringArg(args, "value");
+
+            if (DebugSettingsBlacklist.Contains(name))
+                return MakeToolError("Setting '" + name + "' cannot be modified via debug tools.");
 
             // Try to parse as int for numeric settings
             if (int.TryParse(value, out int intValue))
@@ -1321,6 +1330,9 @@ namespace HTCommander
             int deviceId = GetIntArg(args, "device_id");
             string name = GetStringArg(args, "name");
             string value = GetStringArg(args, "value");
+
+            if (DebugSettingsBlacklist.Contains(name))
+                return MakeToolError("Event '" + name + "' cannot be dispatched via debug tools.");
 
             broker.Dispatch(deviceId, name, value, store: false);
             return MakeToolResult("Dispatched event '" + name + "' to device " + deviceId);

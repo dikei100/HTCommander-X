@@ -370,6 +370,9 @@ namespace HTCommander
 
                 if (string.IsNullOrEmpty(clipName) || pcmData == null || pcmData.Length == 0) return;
 
+                // Limit clip size to 10MB to prevent disk exhaustion
+                if (pcmData.Length > 10 * 1024 * 1024) { broker.LogError("Audio clip too large (max 10MB)"); return; }
+
                 string filePath = SafeClipPath(clipName);
                 if (filePath == null) { broker.LogError($"Invalid clip name: {clipName}"); return; }
                 WriteWavFile(filePath, pcmData, sampleRate, 1, 16);

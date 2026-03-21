@@ -453,7 +453,7 @@ namespace HTCommander
                 {
                     string line = await reader.ReadLineAsync();
                     if (line == null) break; // Disconnected
-                    if (line.Length > 1024) continue; // Reject oversized commands
+                    if (line.Length > 1024) break; // Disconnect on oversized commands
 
                     string response = server.ProcessCommand(line);
                     if (response == null) break; // quit command

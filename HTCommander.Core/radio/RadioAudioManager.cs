@@ -96,7 +96,9 @@ namespace HTCommander
 
         private void OnTransmitVoicePCM(int deviceId, string name, object data)
         {
-            if (data == null) return;
+            if (data == null || _disposed) return;
+            // Check transport under lock to avoid race with disconnect
+            lock (connectionLock) { if (!running || transport == null) return; }
 
             byte[] pcmData = null;
             bool playLocally = false;

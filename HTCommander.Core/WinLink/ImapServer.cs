@@ -928,7 +928,9 @@ namespace HTCommander
                     if (!uint.TryParse(range[0], out startUid))
                         continue;
 
-                    uint endUid = range[1] == "*" ? uint.MaxValue : uint.Parse(range[1]);
+                    uint endUid;
+                    if (range[1] == "*") endUid = uint.MaxValue;
+                    else if (!uint.TryParse(range[1], out endUid)) continue;
 
                     for (int i = 0; i < messageUids.Count; i++)
                     {
@@ -1052,14 +1054,17 @@ namespace HTCommander
                 if (part.Contains(':'))
                 {
                     string[] range = part.Split(':');
-                    int start = int.Parse(range[0]);
-                    int end = range[1] == "*" ? GetMailsInMailbox(selectedMailbox).Count : int.Parse(range[1]);
+                    if (!int.TryParse(range[0], out int start)) continue;
+                    int end;
+                    if (range[1] == "*") end = GetMailsInMailbox(selectedMailbox).Count;
+                    else if (!int.TryParse(range[1], out end)) continue;
                     for (int i = start; i <= end; i++)
                         result.Add(i);
                 }
                 else
                 {
-                    result.Add(int.Parse(part));
+                    if (int.TryParse(part, out int seq))
+                        result.Add(seq);
                 }
             }
 

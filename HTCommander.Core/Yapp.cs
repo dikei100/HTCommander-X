@@ -430,8 +430,8 @@ namespace HTCommander
                 return;
             }
             
-            currentFilename = Path.GetFileName(parts[0].Replace("..", ""));
-            if (string.IsNullOrWhiteSpace(currentFilename))
+            currentFilename = Path.GetFileName(parts[0]);
+            if (string.IsNullOrWhiteSpace(currentFilename) || currentFilename != parts[0].Trim())
             {
                 SendNotReady("Invalid filename");
                 return;
@@ -442,11 +442,17 @@ namespace HTCommander
                 SendNotReady("Invalid file size");
                 return;
             }
-            
+
             Log($"Received header: {currentFilename}, {fileSize} bytes");
-            
+
             // Check if we should resume an existing file
-            string filePath = Path.Combine(downloadPath, currentFilename);
+            string filePath = Path.GetFullPath(Path.Combine(downloadPath, currentFilename));
+            string fullDownloadPath = Path.GetFullPath(downloadPath);
+            if (!filePath.StartsWith(fullDownloadPath + Path.DirectorySeparatorChar))
+            {
+                SendNotReady("Invalid filename");
+                return;
+            }
             resumeOffset = 0;
             
             if (EnableResume && File.Exists(filePath))

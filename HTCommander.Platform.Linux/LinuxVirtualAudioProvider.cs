@@ -5,6 +5,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 */
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -62,30 +63,42 @@ namespace HTCommander.Platform.Linux
 
                 // Start pacat for writing RX audio to the RX sink
                 pacatProcess = new Process();
-                pacatProcess.StartInfo = new ProcessStartInfo
+                var pacatPsi = new ProcessStartInfo
                 {
                     FileName = "pacat",
-                    Arguments = $"--device=HTCommander_RX --format=s16le --rate={sampleRate} --channels=1 --raw --latency-msec=20",
                     UseShellExecute = false,
                     RedirectStandardInput = true,
                     RedirectStandardOutput = false,
                     RedirectStandardError = false,
                     CreateNoWindow = true
                 };
+                pacatPsi.ArgumentList.Add("--device=HTCommander_RX");
+                pacatPsi.ArgumentList.Add("--format=s16le");
+                pacatPsi.ArgumentList.Add($"--rate={sampleRate}");
+                pacatPsi.ArgumentList.Add("--channels=1");
+                pacatPsi.ArgumentList.Add("--raw");
+                pacatPsi.ArgumentList.Add("--latency-msec=20");
+                pacatProcess.StartInfo = pacatPsi;
                 pacatProcess.Start();
 
                 // Start parecord for reading TX audio from the TX sink's monitor
                 parecordProcess = new Process();
-                parecordProcess.StartInfo = new ProcessStartInfo
+                var parecordPsi = new ProcessStartInfo
                 {
                     FileName = "parecord",
-                    Arguments = $"--device=HTCommander_TX.monitor --format=s16le --rate={sampleRate} --channels=1 --raw --latency-msec=20",
                     UseShellExecute = false,
                     RedirectStandardInput = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = false,
                     CreateNoWindow = true
                 };
+                parecordPsi.ArgumentList.Add("--device=HTCommander_TX.monitor");
+                parecordPsi.ArgumentList.Add("--format=s16le");
+                parecordPsi.ArgumentList.Add($"--rate={sampleRate}");
+                parecordPsi.ArgumentList.Add("--channels=1");
+                parecordPsi.ArgumentList.Add("--raw");
+                parecordPsi.ArgumentList.Add("--latency-msec=20");
+                parecordProcess.StartInfo = parecordPsi;
                 try
                 {
                     parecordProcess.Start();
@@ -219,14 +232,17 @@ namespace HTCommander.Platform.Linux
             // List loaded modules and remove any HTCommander ones from previous runs
             try
             {
-                var process = Process.Start(new ProcessStartInfo
+                var cleanupPsi = new ProcessStartInfo
                 {
                     FileName = "pactl",
-                    Arguments = "list short modules",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     CreateNoWindow = true
-                });
+                };
+                cleanupPsi.ArgumentList.Add("list");
+                cleanupPsi.ArgumentList.Add("short");
+                cleanupPsi.ArgumentList.Add("modules");
+                var process = Process.Start(cleanupPsi);
                 string output = process.StandardOutput.ReadToEnd();
                 process.WaitForExit(5000);
 
@@ -245,19 +261,32 @@ namespace HTCommander.Platform.Linux
             catch { }
         }
 
+        private static readonly HashSet<string> AllowedModules = new HashSet<string>
+        {
+            "module-null-sink", "module-virtual-source"
+        };
+
         private int LoadModule(string moduleName, string arguments)
         {
+            if (!AllowedModules.Contains(moduleName))
+                return -1;
+
             try
             {
-                var process = Process.Start(new ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = "pactl",
-                    Arguments = $"load-module {moduleName} {arguments}",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true
-                });
+                };
+                psi.ArgumentList.Add("load-module");
+                psi.ArgumentList.Add(moduleName);
+                // Split module arguments safely (key=value pairs separated by spaces)
+                foreach (string arg in arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    psi.ArgumentList.Add(arg);
+                var process = Process.Start(psi);
                 string output = process.StandardOutput.ReadToEnd().Trim();
                 process.WaitForExit(5000);
 
@@ -274,15 +303,17 @@ namespace HTCommander.Platform.Linux
         {
             try
             {
-                var process = Process.Start(new ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = "pactl",
-                    Arguments = $"unload-module {moduleId}",
                     UseShellExecute = false,
                     RedirectStandardOutput = false,
                     RedirectStandardError = false,
                     CreateNoWindow = true
-                });
+                };
+                psi.ArgumentList.Add("unload-module");
+                psi.ArgumentList.Add(moduleId.ToString());
+                var process = Process.Start(psi);
                 process.WaitForExit(3000);
             }
             catch { }

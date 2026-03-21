@@ -94,11 +94,23 @@ namespace HTCommander.Platform.Linux
 
                 try
                 {
-                    if (File.Exists(symlinkPath) || Directory.Exists(symlinkPath))
+                    // Remove existing symlink/file atomically — delete then create
+                    // Verify that if a file exists at the target, it is a symlink (not a regular file)
+                    var linkInfo = new FileInfo(symlinkPath);
+                    if (linkInfo.Exists || Directory.Exists(symlinkPath))
                     {
-                        File.Delete(symlinkPath);
+                        if (linkInfo.Exists && (linkInfo.Attributes & FileAttributes.ReparsePoint) == 0)
+                        {
+                            // Not a symlink — refuse to delete a regular file (potential attack)
+                            symlinkPath = slavePath;
+                        }
+                        else
+                        {
+                            File.Delete(symlinkPath);
+                        }
                     }
-                    File.CreateSymbolicLink(symlinkPath, slavePath);
+                    if (symlinkPath != slavePath)
+                        File.CreateSymbolicLink(symlinkPath, slavePath);
                 }
                 catch
                 {

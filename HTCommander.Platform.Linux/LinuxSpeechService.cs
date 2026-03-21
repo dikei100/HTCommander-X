@@ -75,22 +75,28 @@ namespace HTCommander.Platform.Linux
 
             try
             {
-                string tempFile = Path.GetTempFileName() + ".wav";
+                string tempFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".wav");
                 try
                 {
                     // Sanitize voice name to prevent argument injection
                     string safeVoice = _selectedVoice != null ? System.Text.RegularExpressions.Regex.Replace(_selectedVoice, @"[^a-zA-Z0-9_\-+]", "") : null;
-                    string voiceArg = safeVoice != null ? $"-v {safeVoice}" : "";
-                    // Sanitize text: remove characters that could be problematic
-                    string safeText = text.Replace("\"", "").Replace("\\", "").Replace("`", "").Replace("$", "").Replace("!", "");
-                    var psi = new ProcessStartInfo("espeak-ng",
-                        $"{voiceArg} -s 110 -w \"{tempFile}\" \"{safeText}\""
-                    )
+                    // Use ArgumentList for safe argument passing (no shell interpretation)
+                    var psi = new ProcessStartInfo("espeak-ng")
                     {
                         UseShellExecute = false,
                         CreateNoWindow = true,
                         RedirectStandardError = true
                     };
+                    if (!string.IsNullOrEmpty(safeVoice))
+                    {
+                        psi.ArgumentList.Add("-v");
+                        psi.ArgumentList.Add(safeVoice);
+                    }
+                    psi.ArgumentList.Add("-s");
+                    psi.ArgumentList.Add("110");
+                    psi.ArgumentList.Add("-w");
+                    psi.ArgumentList.Add(tempFile);
+                    psi.ArgumentList.Add(text);
 
                     using var process = Process.Start(psi);
                     process.WaitForExit(10000);

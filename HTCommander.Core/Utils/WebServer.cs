@@ -146,9 +146,11 @@ namespace HTCommander
                     ContentType = "application/json",
                     Body = Encoding.UTF8.GetBytes(json)
                 };
-                // CORS restricted to same-origin; mobile web UI is served from same host
-                if (request.Headers != null && request.Headers.ContainsKey("Origin"))
-                    resp.Headers["Access-Control-Allow-Origin"] = request.Headers["Origin"];
+                // CORS restricted to localhost/LAN origins
+                string origin = request.Headers != null && request.Headers.ContainsKey("Origin") ? request.Headers["Origin"] : null;
+                string allowedOrigin = ValidateCorsOrigin(origin);
+                if (allowedOrigin != null)
+                    resp.Headers["Access-Control-Allow-Origin"] = allowedOrigin;
                 resp.Headers["Vary"] = "Origin";
                 return resp;
             }
@@ -212,6 +214,25 @@ namespace HTCommander
                 case ".woff2": return "font/woff2";
                 default: return "application/octet-stream";
             }
+        }
+
+        /// <summary>
+        /// Validates a CORS origin against allowed patterns (localhost/loopback/LAN origins).
+        /// </summary>
+        private static string ValidateCorsOrigin(string origin)
+        {
+            if (string.IsNullOrEmpty(origin)) return null;
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out Uri uri)) return null;
+            string host = uri.Host;
+            if (host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]") return origin;
+            if (System.Net.IPAddress.TryParse(host, out var ip))
+            {
+                byte[] bytes = ip.GetAddressBytes();
+                if (bytes.Length == 4 &&
+                    (bytes[0] == 10 || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) || (bytes[0] == 192 && bytes[1] == 168)))
+                    return origin;
+            }
+            return null;
         }
 
         private void Log(string message)
