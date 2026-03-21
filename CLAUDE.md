@@ -17,9 +17,6 @@ dotnet build HTCommander.Core/HTCommander.Core.csproj
 dotnet build HTCommander.Platform.Linux/HTCommander.Platform.Linux.csproj
 dotnet build HTCommander.Desktop/HTCommander.Desktop.csproj
 
-# Build original WinForms project (requires Windows or cross-compile flag)
-dotnet build src/HTCommander.csproj -p:EnableWindowsTargeting=true
-
 # Run the Avalonia Desktop app (Linux)
 dotnet run --project HTCommander.Desktop/HTCommander.Desktop.csproj
 
@@ -53,7 +50,6 @@ HTCommander.Desktop (Avalonia UI) ──┐
                                      ├──> HTCommander.Core (all business logic)
 HTCommander.Platform.Linux ──────────┤
 HTCommander.Platform.Windows ────────┘
-src/ (original WinForms) ────────────┘
 ```
 
 ### HTCommander.Core (net9.0) — zero UI dependencies
@@ -109,10 +105,6 @@ All radio protocol logic, data handlers, codecs, and parsers. Key subsystems:
 - RepeaterBook Import: Radio → "Import from RepeaterBook..." dialog with live API search by country/state or CSV import. Filters by band/mode/status/distance. Auto-fill GPS coordinates. Import to auto-fill empty slots or manual start slot.
 - Logbook Tab: QSO logging with Add/Edit/Remove and ADIF export. Data persisted on DataBroker device 0 (same pattern as Contacts). Auto-fills frequency/mode from connected radio and callsign from settings.
 - Tab order: Communication, Contacts, Logbook, Packets, Terminal, BBS, Mail, Torrent, APRS, Map, Debug
-
-### src/ (net9.0-windows) — Original WinForms app
-
-Still builds and runs on Windows. References Core. Files moved to Core are excluded via `<Compile Remove>` in the csproj. Contains Windows-only code: RadioAudio.cs (NAudio+WinRT), Microphone.cs, WhisperEngine.cs, AirplaneMarker.cs (GMap.NET), and WinForms UI.
 
 ## Key Patterns
 
@@ -183,16 +175,15 @@ The radio uses a **separate RFCOMM channel** for audio (GenericAudio UUID `00001
 
 ## Code Conventions
 
-- **Target**: net9.0 (Core, Linux, Desktop), net9.0-windows (WinForms, Platform.Windows)
+- **Target**: net9.0 (Core, Linux, Desktop), net9.0-windows (Platform.Windows)
 - **Nullable**: disabled across all projects
 - **ImplicitUsings**: disabled — all usings are explicit
 - **AllowUnsafeBlocks**: enabled (SBC codec, SkiaSharp pixel ops, native P/Invoke)
-- **Namespace**: `HTCommander` for Core and src/, `HTCommander.Platform.Linux`, `HTCommander.Platform.Windows`, `HTCommander.Desktop` for other projects
+- **Namespace**: `HTCommander` for Core, `HTCommander.Platform.Linux`, `HTCommander.Platform.Windows`, `HTCommander.Desktop` for other projects
 - Radio dispatches state as **string** (e.g., `"Connected"`, not the enum), so subscribers must compare strings
-- `Utils` is a **partial class** — cross-platform methods in Core, WinForms-specific (SetDoubleBuffered, SendMessage) in src/
 - Avalonia dialogs use `Confirmed` bool property pattern for OK/Cancel results
 - Avalonia `ComboBox` has no `.Text` property — use `AutoCompleteBox` for editable text+dropdown combos, or `SelectedItem?.ToString()` for read-only combos
-- SSTV imaging uses SkiaSharp (`SKBitmap`), not System.Drawing. WinForms bridge: `SkiaBitmapConverter`
+- SSTV imaging uses SkiaSharp (`SKBitmap`), not System.Drawing
 
 ### Theme system
 Avalonia Desktop supports Light, Dark, and Auto (follow OS) themes. Colors are defined as `DynamicResource` references in AXAML files, backed by `ThemeDictionaries` in `App.axaml`. Theme preference stored as `DataBroker.GetValue<string>(0, "Theme", "Dark")`. Apply via `App.SetTheme(themeTag)`.
@@ -235,10 +226,8 @@ For programmatic theme-aware colors in code-behind, use `GetThemeBrush(resourceK
 
 - `docs/CrossPlatformArchitecture.md` — detailed architecture documentation with design decision rationale
 - `packaging/linux/` — AppImage and .deb build scripts. `build-deb.sh` extracts the version from `HTCommander.Desktop.csproj` automatically.
-- `HTCommander.setup/` — Windows MSI installer project
-- `Updater/` — HtCommanderUpdater project (Windows self-update helper)
+- `assets/` — shared assets (application icon)
 - `web/` — embedded web interface (HTML/JS). `index.html` is the desktop Web Bluetooth UI; `mobile.html` is a mobile-first SPA that uses the MCP JSON-RPC API for remote radio control over LAN (status, VFO display, channel switching, chat, PTT with bidirectional audio via WebSocket). **XSS safety**: All user-controlled strings (channel names, callsigns, chat messages) must be passed through `escapeHtml()` before insertion into `innerHTML`. Both `index.html` and `mobile.js` define their own `escapeHtml()` function.
-- `releases/` — Windows MSI release artifacts + `version.txt`
 - Two git remotes: `origin` (Ylianst/HTCommander upstream), `fork` (dikei100/HTCommander-X)
 - Active branch: `main`
 

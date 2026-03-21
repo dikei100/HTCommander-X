@@ -57,7 +57,7 @@ jobs:
           cp packaging/linux/HTCommander.desktop $APPDIR/usr/share/applications/
           cp packaging/linux/HTCommander.desktop $APPDIR/
 
-          convert src/HTCommander.ico[0] -resize 256x256 $APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png
+          convert assets/HTCommander.ico[0] -resize 256x256 $APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png
           cp $APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png $APPDIR/htcommander.png
           cp $APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png $APPDIR/.DirIcon
 

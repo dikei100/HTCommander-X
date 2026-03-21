@@ -33,10 +33,10 @@ cp "$SCRIPT_DIR/HTCommander.desktop" "$APPDIR/usr/share/applications/"
 cp "$SCRIPT_DIR/HTCommander.desktop" "$APPDIR/"
 
 # Copy icon (use the project icon, convert if needed)
-if [ -f "$ROOT_DIR/src/HTCommander.ico" ]; then
+if [ -f "$ROOT_DIR/assets/HTCommander.ico" ]; then
     # Try to extract PNG from ICO using ImageMagick if available
     if command -v convert &> /dev/null; then
-        convert "$ROOT_DIR/src/HTCommander.ico[0]" -resize 256x256 \
+        convert "$ROOT_DIR/assets/HTCommander.ico[0]" -resize 256x256 \
             "$APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png"
         cp "$APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png" "$APPDIR/htcommander.png"
         cp "$APPDIR/usr/share/icons/hicolor/256x256/apps/htcommander.png" "$APPDIR/.DirIcon"

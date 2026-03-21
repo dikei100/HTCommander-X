@@ -12,10 +12,9 @@ HTCommander.sln
 ├── HTCommander.Platform.Windows/  (net9.0-windows — WinRT BT, NAudio, Registry, System.Speech)
 ├── HTCommander.Platform.Linux/    (net9.0 — BlueZ BT, PortAudio, espeak-ng, JSON settings)
 ├── HTCommander.Desktop/           (net9.0 — Avalonia Desktop UI, 11 tabs + 45 dialogs + Mapsui map)
-├── src/                           (net9.0-windows — original WinForms app, still works)
+├── assets/                        (shared assets — application icon)
 ├── packaging/linux/               (AppImage + .deb build scripts)
-├── HTCommander.setup/             (Windows MSI installer)
-└── Updater/                       (existing updater)
+└── web/                           (embedded web interface for mobile PTT + audio)
 ```
 
 ## Core Project (HTCommander.Core)
@@ -43,8 +42,8 @@ All defined in `Core/Interfaces/`:
 | `IFilePickerService` | File dialogs | WinFilePickerService (WinForms) | LinuxFilePickerService (zenity) |
 | `IPlatformUtils` | OS utilities | WinPlatformUtils | LinuxPlatformUtils |
 | `IRadioHost` | Radio→transport callback | Radio implements this | Radio implements this |
-| `IRadioAudio` | Audio abstraction | RadioAudio implements | (pending) |
-| `IWhisperEngine` | Speech-to-text | WhisperEngine implements | (pending) |
+| `IRadioAudioTransport` | BT audio transport | WinRadioAudioTransport | LinuxRadioAudioTransport |
+| `IWhisperEngine` | Speech-to-text | (not yet implemented) | (not yet implemented) |
 
 ## Key Design Decisions
 
@@ -71,29 +70,22 @@ syncContext.Post(_ => callback(deviceId, name, data), null);
 **Problem**: Platform BT transport needs to call `Radio.Debug()` and `Radio.Disconnect()`, but Radio is in Core while transports are in platform projects.
 **Solution**: `IRadioHost` interface in Core defines `MacAddress`, `Debug()`, `Disconnect()`. Radio implements it. Transports reference only the interface.
 
-### 4. Utils.cs as partial class
-
-**Problem**: `Utils.cs` contains both cross-platform helpers (BytesToHex, GetShort, etc.) and WinForms-specific code (SetDoubleBuffered, AddFormattedEntry).
-**Solution**: Split into `partial class Utils` — Core has the cross-platform part, src/ has the Windows-specific part.
-
-### 5. SstvMonitor: SkiaSharp replaces System.Drawing
+### 4. SstvMonitor: SkiaSharp replaces System.Drawing
 
 **Before**: Used `System.Drawing.Bitmap` with `BitmapData.LockBits` and `Marshal.Copy`.
 **After**: Uses `SKBitmap` with `InstallPixels()`. SkiaSharp works on all platforms.
 
-For the WinForms project, `SkiaBitmapConverter` bridges `SKBitmap` ↔ `System.Drawing.Bitmap` via PNG encode/decode.
-
-### 6. VoiceHandler: ISpeechService + IWhisperEngine
+### 5. VoiceHandler: ISpeechService + IWhisperEngine
 
 **Before**: Directly used `System.Speech.SpeechSynthesizer` and `WhisperEngine`.
 **After**: Takes `ISpeechService` via constructor. Uses `VoiceHandler.WhisperEngineFactory` static delegate for STT creation. `WavFileWriter` replaces NAudio's `WaveFileWriter`.
 
-### 7. AppCallbacks: Core→Host bridge
+### 6. AppCallbacks: Core→Host bridge
 
 **Problem**: Core code (Radio.cs) called `Program.BlockBoxEvent()` which is in the host app.
 **Solution**: `AppCallbacks` static class with `Action<string>` delegates that the host app wires up at startup.
 
-### 8. RadioState and CompatibleDevice extracted to Core
+### 7. RadioState and CompatibleDevice extracted to Core
 
 **Before**: Nested types inside `Radio` class (`Radio.RadioState`, `Radio.CompatibleDevice`).
 **After**: Top-level types in Core. All references updated (e.g., `Radio.RadioState.Connected` → `RadioState.Connected`).
@@ -117,11 +109,11 @@ RFCOMM channel numbers vary by radio model and even between connections (VR-N76 
 ## Avalonia Desktop Application
 
 ### Tab Controls (11)
-Each tab control is an Avalonia UserControl with DataBroker subscriptions matching the WinForms originals:
+Each tab control is an Avalonia UserControl with DataBroker subscriptions:
 Communication (Voice), Contacts, Logbook, Packets, Terminal, BBS, Mail, Torrent, APRS, Map, Debug
 
 ### Dialogs (45+)
-All WinForms dialogs have Avalonia equivalents, plus new ones (QuickFrequencyDialog, RepeaterBookImportDialog, etc.). Key patterns:
+45+ Avalonia dialogs including QuickFrequencyDialog, RepeaterBookImportDialog, etc. Key patterns:
 - `WindowStartupLocation="CenterOwner"`
 - `Confirmed` property pattern for OK/Cancel dialogs
 - `Dispatcher.UIThread.Post()` for broker callback UI updates
@@ -131,7 +123,7 @@ Uses **Mapsui.Avalonia** with OpenStreetMap tiles. `AirplaneMapFeature` replaces
 
 ## Data Handler Initialization
 
-Both WinForms and Desktop apps initialize the same set of data handlers:
+The Desktop app initializes data handlers at startup:
 
 ```csharp
 DataBroker.AddDataHandler("FrameDeduplicator", new FrameDeduplicator());
@@ -161,7 +153,7 @@ DataBroker.AddDataHandler("WebServer", new WebServer());
 ```bash
 ./packaging/linux/build-appimage.sh [Release|Debug]
 ```
-Self-contained, no install required. Output: `releases/HTCommander-x86_64.AppImage`
+Self-contained, no install required. Output: `publish/HTCommander-X-x86_64.AppImage`
 
 ### Debian Package
 ```bash
