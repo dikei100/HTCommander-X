@@ -615,6 +615,13 @@ namespace HTCommander.Platform.Linux
                 // Neither poll() nor SO_RCVTIMEO work reliably on RFCOMM sockets,
                 // so we use non-blocking read() with a manual sleep loop.
                 int curFlags = NativeMethods.fcntl(rfcommFd, 3 /* F_GETFL */);
+                if (curFlags < 0)
+                {
+                    Debug($"fcntl F_GETFL failed before read loop (errno={Marshal.GetLastWin32Error()})");
+                    lock (connectionLock) { isConnecting = false; }
+                    parent.Disconnect("Failed to get socket flags", RadioState.UnableToConnect);
+                    return;
+                }
                 NativeMethods.fcntl3(rfcommFd, 4 /* F_SETFL */, curFlags | 0x800 /* O_NONBLOCK */);
                 Debug("Read loop starting (non-blocking read with sleep loop)");
 

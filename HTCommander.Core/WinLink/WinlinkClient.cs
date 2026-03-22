@@ -836,7 +836,9 @@ namespace HTCommander
             FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(exePath);
 
             // Return the FileVersion as a string
-            string[] vers = versionInfo.FileVersion.Split('.');
+            string fileVersion = versionInfo.FileVersion ?? "0.0";
+            string[] vers = fileVersion.Split('.');
+            if (vers.Length < 2) return fileVersion;
             return vers[0] + "." + vers[1];
         }
 
@@ -1200,6 +1202,7 @@ namespace HTCommander
 
             // Decode the proposal
             string[] proposalSplit = proposals[0].Split(' ');
+            if (proposalSplit.Length < 4) return false; // Malformed proposal
             string MID = proposalSplit[1];
             int mFullLen, mCompLen;
             int.TryParse(proposalSplit[2], out mFullLen);

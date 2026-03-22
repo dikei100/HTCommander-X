@@ -129,9 +129,11 @@ namespace HTCommander
                     {
                         string chunkId = new string(br.ReadChars(4));
                         int chunkSize = br.ReadInt32();
+                        if (chunkSize < 0) break; // Malformed chunk size
 
                         if (chunkId == "fmt ")
                         {
+                            if (chunkSize < 16 || fs.Position + 16 > fs.Length) break; // fmt chunk too small or truncated
                             br.ReadInt16(); // audio format
                             channels = br.ReadInt16();
                             sampleRate = br.ReadInt32();

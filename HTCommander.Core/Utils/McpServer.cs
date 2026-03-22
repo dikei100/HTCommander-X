@@ -227,7 +227,6 @@ namespace HTCommander
                 // Constant-time comparison to prevent timing attacks
                 string expectedAuth = "Bearer " + currentToken;
                 bool authValid = authHeader != null &&
-                    authHeader.Length == expectedAuth.Length &&
                     CryptographicOperations.FixedTimeEquals(
                         Encoding.UTF8.GetBytes(authHeader),
                         Encoding.UTF8.GetBytes(expectedAuth));

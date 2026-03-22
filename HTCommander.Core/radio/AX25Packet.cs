@@ -50,7 +50,7 @@ namespace HTCommander
             if (p.dataStr != dataStr) return false;
             if (p.addresses == null || addresses == null) return false;
             int addrCount = Math.Min(2, Math.Min(p.addresses.Count, addresses.Count));
-            for (int i = 0; i < addrCount; i++) { if (!p.addresses[i].isSame(addresses[i])) return false; }
+            for (int i = 0; i < addrCount; i++) { if (p.addresses[i] == null || addresses[i] == null || !p.addresses[i].isSame(addresses[i])) return false; }
             if (p.pollFinal != pollFinal) return false;
             if (p.command != command) return false;
             if (p.nr != nr) return false;

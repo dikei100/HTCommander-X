@@ -713,7 +713,7 @@ namespace HTCommander
         private string GetChannelNameById(int channelId)
         {
             if (channelId >= 254) return "NOAA";
-            if (Channels != null && Channels.Length > channelId && Channels[channelId] != null)
+            if (channelId >= 0 && Channels != null && Channels.Length > channelId && Channels[channelId] != null)
                 return Channels[channelId].name_str;
             return string.Empty;
         }

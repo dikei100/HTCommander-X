@@ -493,7 +493,8 @@ namespace HTCommander
                     }
                     catch (Exception ex)
                     {
-                        SendNotReady($"Cannot open file for resume: {ex.Message}");
+                        Log($"Cannot open file for resume: {ex.Message}");
+                        SendNotReady("Cannot open file for resume");
                     }
                     return;
                 }
@@ -516,7 +517,8 @@ namespace HTCommander
             }
             catch (Exception ex)
             {
-                SendNotReady($"Cannot create file: {ex.Message}");
+                Log($"Cannot create file: {ex.Message}");
+                SendNotReady("Cannot create file");
                 return;
             }
             
@@ -719,6 +721,7 @@ namespace HTCommander
         {
             Log($"Sending NR (Not Ready): {reason}");
             byte[] reasonBytes = Encoding.UTF8.GetBytes(reason);
+            if (reasonBytes.Length > 255) reasonBytes = reasonBytes[..255]; // YAPP length field is single byte
             byte[] packet = new byte[2 + reasonBytes.Length];
             packet[0] = Control.NAK;
             packet[1] = (byte)reasonBytes.Length;
@@ -730,6 +733,7 @@ namespace HTCommander
         {
             Log($"Sending CN (Cancel): {reason}");
             byte[] reasonBytes = Encoding.UTF8.GetBytes(reason);
+            if (reasonBytes.Length > 255) reasonBytes = reasonBytes[..255]; // YAPP length field is single byte
             byte[] packet = new byte[2 + reasonBytes.Length];
             packet[0] = Control.CAN;
             packet[1] = (byte)reasonBytes.Length;

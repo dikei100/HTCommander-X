@@ -45,13 +45,15 @@ namespace HTCommander.Platform.Linux
                 psi.ArgumentList.Add("--file-selection");
                 if (!string.IsNullOrEmpty(title))
                 {
-                    psi.ArgumentList.Add("--title=" + title);
+                    psi.ArgumentList.Add("--title");
+                    psi.ArgumentList.Add(title);
                 }
                 if (save) psi.ArgumentList.Add("--save");
                 if (directory) psi.ArgumentList.Add("--directory");
                 if (!string.IsNullOrEmpty(defaultName))
                 {
-                    psi.ArgumentList.Add("--filename=" + defaultName);
+                    psi.ArgumentList.Add("--filename");
+                    psi.ArgumentList.Add(defaultName);
                 }
 
                 using var process = Process.Start(psi);

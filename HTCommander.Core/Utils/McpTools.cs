@@ -30,7 +30,7 @@ namespace HTCommander
             "McpServerEnabled", "McpServerPort",
             "RigctldServerEnabled", "RigctldServerPort", "CatServerEnabled",
             "AgwpeServerEnabled", "AgwpeServerPort", "VirtualAudioEnabled",
-            "WinlinkPassword", "WinlinkUseStationId",
+            "WinlinkUseStationId",
             "AirplaneServer", "RepeaterBookCountry", "RepeaterBookState",
             "ShowAllChannels", "ShowAirplanesOnMap", "SoftwareModemMode",
             "AudioOutputDevice", "AudioInputDevice"

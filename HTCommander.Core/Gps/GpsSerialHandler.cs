@@ -386,6 +386,7 @@ namespace HTCommander.Gps
         {
             try
             {
+                if (string.IsNullOrEmpty(timeStr) || timeStr.Length < 6) return DateTime.MinValue;
                 int h = int.Parse(timeStr.Substring(0, 2));
                 int m = int.Parse(timeStr.Substring(2, 2));
                 double s = double.Parse(timeStr.Substring(4),

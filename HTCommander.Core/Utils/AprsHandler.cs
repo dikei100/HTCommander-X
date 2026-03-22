@@ -905,8 +905,7 @@ namespace HTCommander
                 // Use constant-time comparison to prevent timing attacks
                 byte[] computedBytes = Encoding.UTF8.GetBytes(authCodeBase64);
                 byte[] providedBytes = Encoding.UTF8.GetBytes(authCodeBase64Check);
-                if (computedBytes.Length == providedBytes.Length &&
-                    System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(computedBytes, providedBytes))
+                if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(computedBytes, providedBytes))
                 {
                     return AX25Packet.AuthState.Success; // Verified authentication
                 }

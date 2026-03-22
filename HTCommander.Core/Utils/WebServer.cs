@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
@@ -141,14 +142,18 @@ namespace HTCommander
 
                 // When ServerBindAll is enabled, require Bearer token to access config (which includes mcpToken)
                 string mcpToken = broker.GetValue<string>(0, "McpApiToken", "") ?? "";
-                if (bindAllSetting == 1 && !string.IsNullOrEmpty(mcpToken))
+                if (bindAllSetting == 1)
                 {
+                    // When ServerBindAll is enabled, always require auth — reject if token not yet initialized
+                    if (string.IsNullOrEmpty(mcpToken))
+                    {
+                        return new TlsHttpServer.HttpResponse(503, "503 - Service Unavailable");
+                    }
                     string authHeader = request.Headers != null && request.Headers.ContainsKey("Authorization") ? request.Headers["Authorization"] : null;
                     // Constant-time comparison of full "Bearer <token>" string to prevent timing leaks
                     string expectedAuth = "Bearer " + mcpToken;
                     bool authValid = authHeader != null &&
-                        authHeader.Length == expectedAuth.Length &&
-                        System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                        CryptographicOperations.FixedTimeEquals(
                             Encoding.UTF8.GetBytes(authHeader),
                             Encoding.UTF8.GetBytes(expectedAuth));
                     if (!authValid)
