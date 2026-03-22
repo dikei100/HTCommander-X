@@ -604,6 +604,13 @@ namespace HTCommander
             // Write data to file
             try
             {
+                // Validate total received data doesn't exceed declared file size (with 1KB tolerance for framing)
+                if (bytesTransferred + packetData.Length > fileSize + 1024)
+                {
+                    CancelTransfer("Received more data than declared file size");
+                    return;
+                }
+
                 fileStream.Write(packetData, 0, packetData.Length);
                 fileStream.Flush();
                 bytesTransferred += packetData.Length;

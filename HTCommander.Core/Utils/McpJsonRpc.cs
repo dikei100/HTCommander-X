@@ -251,7 +251,7 @@ namespace HTCommander
                 case "resources/read":
                     return HandleResourcesRead(request);
                 default:
-                    return MakeError(request.Id, -32601, "Method not found: " + request.Method);
+                    return MakeError(request.Id, -32601, "Method not found");
             }
         }
 

@@ -20,10 +20,14 @@ namespace HTCommander
         private DataBrokerClient broker;
         private TcpListener listener;
         private Thread listenerThread;
-        private bool running;
+        private volatile bool running;
         public readonly int Port;
         private const int MaxSessions = 10;
         private List<ImapSession> sessions = new List<ImapSession>();
+        private int globalAuthFailures = 0;
+        private long lastAuthFailureReset = Environment.TickCount64;
+        private readonly object authRateLock = new object();
+        private const int MaxGlobalAuthFailuresPerMinute = 20;
 
         public ImapServer(int port)
         {
@@ -104,6 +108,25 @@ namespace HTCommander
                 sessions.Remove(session);
             }
         }
+
+        internal bool CheckGlobalAuthRateLimit()
+        {
+            lock (authRateLock)
+            {
+                long now = Environment.TickCount64;
+                if (now - lastAuthFailureReset > 60000)
+                {
+                    globalAuthFailures = 0;
+                    lastAuthFailureReset = now;
+                }
+                return globalAuthFailures < MaxGlobalAuthFailuresPerMinute;
+            }
+        }
+
+        internal void RecordAuthFailure()
+        {
+            lock (authRateLock) { globalAuthFailures++; }
+        }
     }
 
     public class ImapSession
@@ -113,7 +136,9 @@ namespace HTCommander
         private TcpClient client;
         private StreamReader reader;
         private StreamWriter writer;
+        private const int MaxAuthAttempts = 5;
         private bool authenticated;
+        private int authAttempts = 0;
         private int selectedMailbox = -1;
         private Dictionary<int, uint> messageUids = new Dictionary<int, uint>();
         private Dictionary<int, HashSet<string>> messageFlags = new Dictionary<int, HashSet<string>>();
@@ -303,6 +328,12 @@ namespace HTCommander
 
         private void HandleLogin(string tag, string args)
         {
+            if (authAttempts >= MaxAuthAttempts || !server.CheckGlobalAuthRateLimit())
+            {
+                SendResponse(tag, "NO Too many authentication attempts");
+                return;
+            }
+
             string[] parts = ParseImapString(args);
             if (parts.Length < 2)
             {
@@ -328,7 +359,9 @@ namespace HTCommander
             }
             else
             {
-                broker.LogInfo($"IMAP: Authentication failed for {user}");
+                authAttempts++;
+                server.RecordAuthFailure();
+                broker.LogInfo($"IMAP: Authentication failed (attempt {authAttempts}/{MaxAuthAttempts})");
                 SendResponse(tag, "NO LOGIN failed");
             }
         }
@@ -1033,7 +1066,7 @@ namespace HTCommander
                 messageUids[i] = uid;
                 messageFlags[i] = new HashSet<string>();
 
-                if (uid >= uidNext)
+                if (uid >= uidNext && uid < uint.MaxValue)
                     uidNext = uid + 1;
             }
         }
@@ -1044,16 +1077,23 @@ namespace HTCommander
             return DataBroker.GetValue<List<WinLinkMail>>(1, "Mails", new List<WinLinkMail>()).Where(m => m.Mailbox == folderName).ToList();
         }
 
+        // Sanitize RFC822 header values to prevent IMAP response injection via CRLF
+        private static string SanitizeHeaderValue(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return value.Replace("\r", "").Replace("\n", "").Replace("\u2028", "").Replace("\u2029", "");
+        }
+
         private string BuildRfc822Header(WinLinkMail mail)
         {
             StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"From: {mail.From}");
-            sb.AppendLine($"To: {mail.To}");
+            sb.AppendLine($"From: {SanitizeHeaderValue(mail.From)}");
+            sb.AppendLine($"To: {SanitizeHeaderValue(mail.To)}");
             if (!string.IsNullOrEmpty(mail.Cc))
-                sb.AppendLine($"Cc: {mail.Cc}");
-            sb.AppendLine($"Subject: {mail.Subject}");
+                sb.AppendLine($"Cc: {SanitizeHeaderValue(mail.Cc)}");
+            sb.AppendLine($"Subject: {SanitizeHeaderValue(mail.Subject)}");
             sb.AppendLine($"Date: {mail.DateTime:R}");
-            sb.AppendLine($"Message-ID: <{mail.MID}@htcommander>");
+            sb.AppendLine($"Message-ID: <{SanitizeHeaderValue(mail.MID)}@htcommander>");
             sb.AppendLine("MIME-Version: 1.0");
             sb.AppendLine("Content-Type: text/plain; charset=utf-8");
             sb.AppendLine();

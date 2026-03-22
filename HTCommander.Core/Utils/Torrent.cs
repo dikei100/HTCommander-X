@@ -712,7 +712,9 @@ namespace HTCommander
             }
             else if (p.pid == 163)
             {
-                // This is a data block
+                // This is a data block - validate minimum data length
+                if (p.data == null || p.data.Length < 8) return;
+
                 string callsign = p.addresses[0].address;
                 int stationId = p.addresses[0].SSID;
                 byte[] blockShortId = new byte[6];
@@ -721,6 +723,7 @@ namespace HTCommander
                 bool isStationFile = ((p.data[5] & 0x02) != 0);
                 blockShortId[5] = (byte)(blockShortId[5] & 0xFE);
                 int blockNumber = (p.data[6] << 8) + p.data[7];
+                if (blockNumber > 10000) return; // Cap block number to prevent unbounded array allocation
                 byte[] block = new byte[p.data.Length - 8];
                 Array.Copy(p.data, 8, block, 0, block.Length);
 

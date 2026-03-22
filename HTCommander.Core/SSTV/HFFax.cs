@@ -85,7 +85,7 @@ namespace HTCommander.SSTV
             lowPassFilter.Cutoff(horizontalPixels, 2 * scanLineSamples, 2);
             lowPassFilter.Reset();
             for (int i = 0; i < scanLineSamples; ++i)
-                scratchBuffer[i] = lowPassFilter.Avg(scanLineBuffer[i]);
+                scratchBuffer[i] = lowPassFilter.Avg(scanLineBuffer[syncPulseIndex + i]);
             lowPassFilter.Reset();
             for (int i = scanLineSamples - 1; i >= 0; --i)
                 scratchBuffer[i] = FreqToLevel(lowPassFilter.Avg(scratchBuffer[i]), frequencyOffset);

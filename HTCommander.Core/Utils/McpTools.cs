@@ -26,7 +26,7 @@ namespace HTCommander
         {
             "CallSign", "StationId", "AllowTransmit", "Theme", "CheckForUpdates",
             "VoiceLanguage", "Voice", "SpeechToText", "MicGain", "OutputVolume",
-            "ServerBindAll", "TlsEnabled", "WebServerEnabled", "WebServerPort",
+            "WebServerEnabled", "WebServerPort",
             "McpServerEnabled", "McpServerPort",
             "RigctldServerEnabled", "RigctldServerPort", "CatServerEnabled",
             "AgwpeServerEnabled", "AgwpeServerPort", "VirtualAudioEnabled",
@@ -708,13 +708,16 @@ namespace HTCommander
                     case "disable_recording": return CallDisableRecording(arguments);
                     case "get_setting": return CallGetSetting(arguments);
                     case "set_setting": return CallSetSetting(arguments);
-                    case "get_logs": return CallGetLogs(arguments);
+                    case "get_logs":
+                        if (broker.GetValue<int>(0, "McpDebugToolsEnabled", 0) != 1)
+                            return MakeToolError("Debug tools are disabled.");
+                        return CallGetLogs(arguments);
                     case "get_databroker_state": return CallGetDataBrokerState(arguments);
                     case "get_app_setting": return CallGetAppSetting(arguments);
                     case "set_app_setting": return CallSetAppSetting(arguments);
                     case "dispatch_event": return CallDispatchEvent(arguments);
                     default:
-                        return MakeToolError("Unknown tool: " + name);
+                        return MakeToolError("Unknown tool");
                 }
             }
             catch (Exception ex)
@@ -1279,6 +1282,9 @@ namespace HTCommander
             var result = new Dictionary<string, string>();
             foreach (var kvp in values)
             {
+                // Filter sensitive credentials from debug output
+                if (deviceId == 0 && DebugSettingsBlacklist.Contains(kvp.Key)) continue;
+
                 try
                 {
                     if (kvp.Value is byte[] bytes)
@@ -1303,6 +1309,9 @@ namespace HTCommander
                 return MakeToolError("Debug tools are disabled.");
 
             string name = GetStringArg(args, "name");
+            if (DebugSettingsBlacklist.Contains(name))
+                return MakeToolError("Setting '" + name + "' cannot be read via debug tools.");
+
             var value = DataBroker.GetValue(0, name, null);
             if (value == null) return MakeToolResult("Setting '" + name + "' not found");
             return MakeToolResult(name + " = " + value.ToString());

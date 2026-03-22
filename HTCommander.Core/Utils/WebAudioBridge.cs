@@ -116,35 +116,41 @@ namespace HTCommander
             if (bindAll == 1)
             {
                 string expectedToken = DataBroker.GetValue<string>(0, "McpApiToken", "") ?? "";
-                if (!string.IsNullOrEmpty(expectedToken))
+                if (string.IsNullOrEmpty(expectedToken))
                 {
-                    bool authenticated = false;
-                    try
+                    // Reject connection if token is not yet initialized (no auth bypass)
+                    Log("WebSocket client rejected: API token not initialized");
+                    try { await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Service unavailable", CancellationToken.None); } catch { }
+                    try { ws.Dispose(); } catch { }
+                    return;
+                }
+
+                bool authenticated = false;
+                try
+                {
+                    // First message must be text: "AUTH:<token>"
+                    var authBuffer = new byte[1024];
+                    var authResult = await ws.ReceiveAsync(new ArraySegment<byte>(authBuffer), ct);
+                    if (authResult.MessageType == WebSocketMessageType.Text && authResult.Count > 5 && authResult.Count <= authBuffer.Length)
                     {
-                        // First message must be text: "AUTH:<token>"
-                        var authBuffer = new byte[1024];
-                        var authResult = await ws.ReceiveAsync(new ArraySegment<byte>(authBuffer), ct);
-                        if (authResult.MessageType == WebSocketMessageType.Text && authResult.Count > 5 && authResult.Count <= authBuffer.Length)
+                        string authMsg = Encoding.UTF8.GetString(authBuffer, 0, authResult.Count);
+                        if (authMsg.StartsWith("AUTH:"))
                         {
-                            string authMsg = Encoding.UTF8.GetString(authBuffer, 0, authResult.Count);
-                            if (authMsg.StartsWith("AUTH:"))
-                            {
-                                string providedToken = authMsg.Substring(5);
-                                byte[] providedBytes = Encoding.UTF8.GetBytes(providedToken);
-                                byte[] expectedBytes = Encoding.UTF8.GetBytes(expectedToken);
-                                authenticated = CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes);
-                            }
+                            string providedToken = authMsg.Substring(5);
+                            byte[] providedBytes = Encoding.UTF8.GetBytes(providedToken);
+                            byte[] expectedBytes = Encoding.UTF8.GetBytes(expectedToken);
+                            authenticated = CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes);
                         }
                     }
-                    catch { }
+                }
+                catch { }
 
-                    if (!authenticated)
-                    {
-                        Log("WebSocket client rejected: authentication failed");
-                        try { await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Authentication required", CancellationToken.None); } catch { }
-                        try { ws.Dispose(); } catch { }
-                        return;
-                    }
+                if (!authenticated)
+                {
+                    Log("WebSocket client rejected: authentication failed");
+                    try { await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Authentication required", CancellationToken.None); } catch { }
+                    try { ws.Dispose(); } catch { }
+                    return;
                 }
             }
 
@@ -233,6 +239,9 @@ namespace HTCommander
                     return;
                 }
 
+                // Dispose existing timers before creating new ones to prevent leaks
+                pttSilenceTimer?.Dispose();
+                pttTimeoutTimer?.Dispose();
                 pttOwner = clientId;
                 lastAudioFromPttOwner = Environment.TickCount64;
                 pttSilenceTimer = new Timer(DispatchSilence, null, 0, 80);

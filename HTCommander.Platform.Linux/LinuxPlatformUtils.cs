@@ -32,6 +32,8 @@ namespace HTCommander.Platform.Linux
         public void OpenFileManager(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
+            // Validate that path is a local filesystem path, not a URL
+            if (!Path.IsPathRooted(path)) return;
             try
             {
                 var psi = new ProcessStartInfo("xdg-open") { UseShellExecute = false };

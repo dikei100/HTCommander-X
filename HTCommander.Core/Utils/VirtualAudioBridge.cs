@@ -17,9 +17,9 @@ namespace HTCommander
     public class VirtualAudioBridge : IDisposable
     {
         private DataBrokerClient broker;
-        private IVirtualAudioProvider provider;
+        private volatile IVirtualAudioProvider provider;
         private IPlatformServices platformServices;
-        private bool running = false;
+        private volatile bool running = false;
         private int activeRadioId = -1;
 
         public VirtualAudioBridge(IPlatformServices platform)

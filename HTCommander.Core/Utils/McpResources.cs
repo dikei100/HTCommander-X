@@ -118,6 +118,16 @@ namespace HTCommander
                     string resource = remainder.Substring(slashIdx + 1);
                     if (int.TryParse(deviceIdStr, out int deviceId))
                     {
+                        // Validate device ID is an actual connected radio
+                        var connectedIds = GetConnectedRadioIds();
+                        if (!connectedIds.Contains(deviceId))
+                        {
+                            return new
+                            {
+                                contents = new[] { new McpResourceContent { Uri = uri, Text = "Resource not found" } }
+                            };
+                        }
+
                         switch (resource)
                         {
                             case "info": return ReadRadioInfo(deviceId);
@@ -131,9 +141,15 @@ namespace HTCommander
 
             return new
             {
-                contents = new[] { new McpResourceContent { Uri = uri, Text = "Resource not found: " + uri } }
+                contents = new[] { new McpResourceContent { Uri = uri, Text = "Resource not found" } }
             };
         }
+
+        // Sensitive settings that must never be exposed via MCP resources
+        private static readonly HashSet<string> SensitiveSettings = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "McpApiToken", "WinlinkPassword"
+        };
 
         private object ReadAppSettings()
         {
@@ -141,6 +157,9 @@ namespace HTCommander
             var result = new Dictionary<string, string>();
             foreach (var kvp in values)
             {
+                // Never expose sensitive credentials via MCP resources
+                if (SensitiveSettings.Contains(kvp.Key)) continue;
+
                 try
                 {
                     if (kvp.Value is byte[])

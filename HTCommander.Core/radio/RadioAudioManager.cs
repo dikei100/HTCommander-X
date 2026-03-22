@@ -54,7 +54,8 @@ namespace HTCommander
 
         // Recording
         private WavFileWriter _recorder;
-        private bool _recording;
+        private volatile bool _recording;
+        private readonly object recordingLock = new object();
 
         // Voice transmission
         private ConcurrentQueue<byte[]> pcmQueue = new ConcurrentQueue<byte[]>();
@@ -180,35 +181,41 @@ namespace HTCommander
 
         public void StartRecording(string path)
         {
-            if (_recording) return;
-            try
+            lock (recordingLock)
             {
-                _recorder = new WavFileWriter(path, 32000, 16, 1);
-                _recording = true;
-                Debug($"Recording started: {path}");
-            }
-            catch (Exception ex)
-            {
-                Debug($"Failed to start recording: {ex.Message}");
+                if (_recording) return;
+                try
+                {
+                    _recorder = new WavFileWriter(path, 32000, 16, 1);
+                    _recording = true;
+                    Debug($"Recording started: {path}");
+                }
+                catch (Exception ex)
+                {
+                    Debug($"Failed to start recording: {ex.Message}");
+                }
             }
         }
 
         public void StopRecording()
         {
-            if (!_recording) return;
-            _recording = false;
-            try
+            lock (recordingLock)
             {
-                _recorder?.Dispose();
-                Debug("Recording stopped.");
-            }
-            catch (Exception ex)
-            {
-                Debug($"Error stopping recording: {ex.Message}");
-            }
-            finally
-            {
-                _recorder = null;
+                if (!_recording) return;
+                _recording = false;
+                try
+                {
+                    _recorder?.Dispose();
+                    Debug("Recording stopped.");
+                }
+                catch (Exception ex)
+                {
+                    Debug($"Error stopping recording: {ex.Message}");
+                }
+                finally
+                {
+                    _recorder = null;
+                }
             }
         }
 
@@ -669,10 +676,16 @@ namespace HTCommander
                     }
 
                     // Write to recording file if recording
-                    if (_recording && _recorder != null)
+                    if (_recording)
                     {
-                        try { _recorder.Write(pcmFrame, 0, totalWritten); }
-                        catch (Exception ex) { Debug($"DecodeSbcFrame.RecorderWrite: {ex.Message}"); }
+                        lock (recordingLock)
+                        {
+                            if (_recording && _recorder != null)
+                            {
+                                try { _recorder.Write(pcmFrame, 0, totalWritten); }
+                                catch (Exception ex) { Debug($"DecodeSbcFrame.RecorderWrite: {ex.Message}"); }
+                            }
+                        }
                     }
 
                     // Dispatch decoded audio data for VoiceHandler

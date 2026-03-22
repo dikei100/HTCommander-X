@@ -793,6 +793,7 @@ namespace HTCommander
 
         public void SetSquelchLevel(int level)
         {
+            if (level < 0 || level > 9) return;
             WriteSettings(Settings.ToByteArray(Settings.channel_a, Settings.channel_b, Settings.double_channel, Settings.scan, level));
         }
 
@@ -1064,6 +1065,7 @@ namespace HTCommander
 
         public void SendRawCommand(byte[] rawcmd)
         {
+            if (rawcmd == null || rawcmd.Length < 4) return;
             byte[] data = new byte[rawcmd.Length - 4];
             Array.Copy(rawcmd, 4, data, 0, rawcmd.Length - 4);
             RadioCommandGroup group = (RadioCommandGroup)Utils.GetShort(rawcmd, 0);
@@ -1376,7 +1378,7 @@ namespace HTCommander
 
         private void HandleReadStatus(byte[] value)
         {
-            if (value.Length < 8) { Debug("READ_STATUS response too short"); return; }
+            if (value.Length < 9) { Debug("READ_STATUS response too short"); return; }
             RadioPowerStatus powerStatus = (RadioPowerStatus)Utils.GetShort(value, 5);
             switch (powerStatus)
             {

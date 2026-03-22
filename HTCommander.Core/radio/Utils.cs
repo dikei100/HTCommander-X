@@ -88,6 +88,7 @@ namespace HTCommander
         public static string BytesToHex(byte[] Bytes, int offset, int length)
         {
             if (Bytes == null) return "";
+            if (offset < 0 || length < 0 || offset + length > Bytes.Length) return "";
             StringBuilder Result = new StringBuilder(length * 2);
             string HexAlphabet = "0123456789ABCDEF";
             for (int i = offset; i < length + offset; i++) { Result.Append(HexAlphabet[(int)(Bytes[i] >> 4)]); Result.Append(HexAlphabet[(int)(Bytes[i] & 0xF)]); }
@@ -120,8 +121,16 @@ namespace HTCommander
             if (d == null || p < 0 || p + 3 >= d.Length) throw new ArgumentException("GetInt: bounds check failed");
             return ((int)d[p] << 24) + (int)(d[p + 1] << 16) + (int)(d[p + 2] << 8) + (int)d[p + 3];
         }
-        public static void SetShort(byte[] d, int p, int v) { d[p] = (byte)((v >> 8) & 0xFF); d[p + 1] = (byte)(v & 0xFF); }
-        public static void SetInt(byte[] d, int p, int v) { d[p] = (byte)(v >> 24); d[p + 1] = (byte)((v >> 16) & 0xFF); d[p + 2] = (byte)((v >> 8) & 0xFF); d[p + 3] = (byte)(v & 0xFF); }
+        public static void SetShort(byte[] d, int p, int v)
+        {
+            if (d == null || p < 0 || p + 1 >= d.Length) throw new ArgumentException("SetShort: bounds check failed");
+            d[p] = (byte)((v >> 8) & 0xFF); d[p + 1] = (byte)(v & 0xFF);
+        }
+        public static void SetInt(byte[] d, int p, int v)
+        {
+            if (d == null || p < 0 || p + 3 >= d.Length) throw new ArgumentException("SetInt: bounds check failed");
+            d[p] = (byte)(v >> 24); d[p + 1] = (byte)((v >> 16) & 0xFF); d[p + 2] = (byte)((v >> 8) & 0xFF); d[p + 3] = (byte)(v & 0xFF);
+        }
 
         public static Dictionary<string, List<AX25Address>> DecodeAprsRoutes(string routesStr)
         {

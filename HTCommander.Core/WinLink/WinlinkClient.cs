@@ -900,6 +900,13 @@ namespace HTCommander
             if (sessionState.ContainsKey("wlMailBinary"))
             {
                 MemoryStream blocks = (MemoryStream)sessionState["wlMailBinary"];
+                if (blocks.Length + data.Length > 10 * 1024 * 1024)
+                {
+                    StateMessage("Mail reception aborted: data exceeds 10MB limit");
+                    sessionState.Remove("wlMailBinary");
+                    blocks.Dispose();
+                    return;
+                }
                 blocks.Write(data, 0, data.Length);
                 StateMessage("Receiving mail, " + blocks.Length + ((blocks.Length < 2) ? " byte" : " bytes"));
                 if (ExtractMail(blocks) == true)

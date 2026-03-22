@@ -25,8 +25,8 @@ namespace HTCommander.Platform.Windows
         private RfcommDeviceService rfcommService = null;
         private Stream winRtInputStream = null;
         private Stream winRtOutputStream = null;
-        private bool _isConnected = false;
-        private bool _disposed = false;
+        private volatile bool _isConnected = false;
+        private volatile bool _disposed = false;
 
         // GenericAudio UUID used by these radios for audio channel
         private static readonly Guid GenericAudioUuid = new Guid("00001203-0000-1000-8000-00805f9b34fb");

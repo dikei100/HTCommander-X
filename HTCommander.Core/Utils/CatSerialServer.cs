@@ -25,6 +25,8 @@ namespace HTCommander
         private volatile bool running = false;
         private volatile bool pttActive = false;
         private Timer pttSilenceTimer;
+        private Timer pttTimeoutTimer;
+        private const int PttTimeoutMs = 30000; // Auto-release PTT after 30s with no data
         private long cachedFrequencyA = 145500000; // Accessed from multiple threads; reads/writes are non-atomic on 32-bit but acceptable for cached display value
         private long cachedFrequencyB = 145500000;
         private volatile int activeRadioId = -1;
@@ -354,6 +356,7 @@ namespace HTCommander
             if (on && !wasActive)
             {
                 pttSilenceTimer = new Timer(DispatchSilence, null, 0, 80);
+                pttTimeoutTimer = new Timer(PttTimeoutCallback, null, PttTimeoutMs, Timeout.Infinite);
                 Log("CAT PTT ON");
                 broker?.Dispatch(1, "ExternalPttState", true, store: false);
             }
@@ -361,8 +364,19 @@ namespace HTCommander
             {
                 pttSilenceTimer?.Dispose();
                 pttSilenceTimer = null;
+                pttTimeoutTimer?.Dispose();
+                pttTimeoutTimer = null;
                 Log("CAT PTT OFF");
                 broker?.Dispatch(1, "ExternalPttState", false, store: false);
+            }
+        }
+
+        private void PttTimeoutCallback(object state)
+        {
+            if (pttActive)
+            {
+                Log("CAT PTT auto-released after timeout");
+                SetPtt(false);
             }
         }
 

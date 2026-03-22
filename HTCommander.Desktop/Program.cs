@@ -121,7 +121,22 @@ namespace HTCommander.Desktop
             try
             {
                 string logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HTCommander", "debug.log");
+
+                // Cap log file size at 10MB to prevent disk exhaustion
+                try
+                {
+                    var fi = new FileInfo(logPath);
+                    if (fi.Exists && fi.Length > 10 * 1024 * 1024) File.Delete(logPath);
+                }
+                catch { }
+
                 File.AppendAllText(logPath, msg + "\r\n");
+
+                // Set restrictive permissions on Linux (chmod 600)
+                if (!OperatingSystem.IsWindows())
+                {
+                    try { File.SetUnixFileMode(logPath, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
+                }
             }
             catch (Exception) { }
         }

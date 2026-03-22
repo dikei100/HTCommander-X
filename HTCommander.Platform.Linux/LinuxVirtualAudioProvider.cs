@@ -243,7 +243,10 @@ namespace HTCommander.Platform.Linux
                 cleanupPsi.ArgumentList.Add("short");
                 cleanupPsi.ArgumentList.Add("modules");
                 using var process = Process.Start(cleanupPsi);
-                string output = process.StandardOutput.ReadToEnd();
+                // Read output with size limit to prevent unbounded memory use
+                char[] buf = new char[512 * 1024];
+                int charsRead = process.StandardOutput.Read(buf, 0, buf.Length);
+                string output = new string(buf, 0, charsRead);
                 process.WaitForExit(5000);
 
                 foreach (string line in output.Split('\n'))

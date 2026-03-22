@@ -20,7 +20,7 @@ namespace HTCommander
         private DataBrokerClient broker;
         private TcpListener listener;
         private Thread listenerThread;
-        private bool running;
+        private volatile bool running;
         public readonly int Port;
         private const int MaxSessions = 10;
         private List<SmtpSession> sessions = new List<SmtpSession>();
