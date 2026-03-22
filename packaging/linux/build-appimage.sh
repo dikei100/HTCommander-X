@@ -58,8 +58,8 @@ chmod +x "$APPDIR/AppRun"
 
 # Download appimagetool if not present
 APPIMAGETOOL="$SCRIPT_DIR/appimagetool-x86_64.AppImage"
-APPIMAGETOOL_URL="https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
-APPIMAGETOOL_SHA256="0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
+APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
+APPIMAGETOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 if [ ! -f "$APPIMAGETOOL" ]; then
     echo "Downloading appimagetool..."
     wget -q "$APPIMAGETOOL_URL" -O "$APPIMAGETOOL"

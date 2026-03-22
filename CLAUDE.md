@@ -35,7 +35,7 @@ No test projects exist in this codebase.
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/release.yml`) triggers on version tags (`v*`). Builds Linux and Windows self-contained packages on `ubuntu-latest`, produces: AppImage, .deb, .rpm, .pkg.tar.zst, and Windows zip. All artifacts are uploaded as a GitHub Release with auto-generated notes. Actions are pinned to commit SHAs for supply chain security. `fpm` gem pinned to version 1.15.1 for reproducible builds. `appimagetool` pinned to release 13 with SHA256 checksum verification (both in CI and `build-appimage.sh`).
+GitHub Actions workflow (`.github/workflows/release.yml`) triggers on version tags (`v*`). Builds Linux and Windows self-contained packages on `ubuntu-latest`, produces: AppImage, .deb, .rpm, .pkg.tar.zst, and Windows zip. All artifacts are uploaded as a GitHub Release with auto-generated notes. Actions are pinned to commit SHAs for supply chain security. `fpm` gem pinned to version 1.15.1 for reproducible builds. `appimagetool` pinned to v1.9.1 (from `AppImage/appimagetool` repo) with SHA256 checksum verification (both in CI and `build-appimage.sh`). CI uses `--appimage-extract-and-run` flag since GitHub Actions runners lack FUSE support.
 
 **Versioning**: The assembly version is set in `HTCommander.Desktop/HTCommander.Desktop.csproj` `<Version>` property. This must match the git tag (e.g., tag `v0.1.4` → `<Version>0.1.4</Version>`). The About dialog and update checker both read `Assembly.GetEntryAssembly().GetName().Version`. Push to the `fork` remote (dikei100/HTCommander-X) with `--tags` to trigger a release build.
 
