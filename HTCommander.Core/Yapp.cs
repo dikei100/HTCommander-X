@@ -479,21 +479,13 @@ namespace HTCommander
                     {
                         fileStream = new FileStream(filePath, FileMode.Append, FileAccess.Write);
                         useChecksumForTransfer = UseChecksum;
-                        
-                        // Update UI
-                        /*
-                        parent?.updateTerminalFileTransferProgress(
-                            MainForm.TerminalFileTransferStates.Receiving, 
-                            currentFilename, 
-                            (int)fileSize, 
-                            (int)bytesTransferred);
-                        */
-
                         OnProgress();
                     }
                     catch (Exception ex)
                     {
                         Log($"Cannot open file for resume: {ex.Message}");
+                        try { fileStream?.Dispose(); } catch { }
+                        fileStream = null;
                         SendNotReady("Cannot open file for resume");
                     }
                     return;

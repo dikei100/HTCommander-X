@@ -117,7 +117,9 @@ namespace HTCommander.Platform.Linux
                             // Resample PCM from srcRate to sampleRate using linear interpolation
                             // WAV header: 44 bytes, 16-bit mono PCM
                             int srcSamples = (wavData.Length - 44) / 2;
-                            int dstSamples = (int)((long)srcSamples * sampleRate / srcRate);
+                            long dstSamplesLong = (long)srcSamples * sampleRate / srcRate;
+                            if (dstSamplesLong <= 0 || dstSamplesLong > (int.MaxValue - 44) / 2) return wavData;
+                            int dstSamples = (int)dstSamplesLong;
                             byte[] resampled = new byte[44 + dstSamples * 2];
 
                             // Copy and update WAV header

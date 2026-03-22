@@ -881,7 +881,7 @@ namespace HTCommander
             string safeName = string.Join("_", filename.Split(Path.GetInvalidFileNameChars()));
             string fullPath = Path.GetFullPath(Path.Combine(_attachmentsPath, $"{mid}_{safeName}"));
             // Validate resolved path stays within attachments directory
-            if (!fullPath.StartsWith(_attachmentsPath + Path.DirectorySeparatorChar) && fullPath != _attachmentsPath)
+            if (!fullPath.StartsWith(_attachmentsPath + Path.DirectorySeparatorChar))
                 throw new ArgumentException("Invalid attachment path");
             return fullPath;
         }

@@ -25,10 +25,13 @@ namespace HTCommander
         public static byte[] Resample16BitMono(byte[] input, int inputSampleRate, int outputSampleRate)
         {
             if (input == null || input.Length < 2) return input;
+            if (inputSampleRate <= 0 || outputSampleRate <= 0) return input;
             if (inputSampleRate == outputSampleRate) return input;
 
             int inputSamples = input.Length / 2;
-            int outputSamples = (int)((long)inputSamples * outputSampleRate / inputSampleRate);
+            long outputSamplesLong = (long)inputSamples * outputSampleRate / inputSampleRate;
+            if (outputSamplesLong <= 0 || outputSamplesLong > int.MaxValue / 2) return input;
+            int outputSamples = (int)outputSamplesLong;
             byte[] output = new byte[outputSamples * 2];
 
             double ratio = (double)inputSampleRate / outputSampleRate;
@@ -58,6 +61,7 @@ namespace HTCommander
         public static byte[] ResampleStereoToMono16Bit(byte[] input, int inputSampleRate, int outputSampleRate)
         {
             if (input == null || input.Length < 4) return input;
+            if (inputSampleRate <= 0 || outputSampleRate <= 0) return input;
 
             // First convert stereo to mono
             int stereoSamples = input.Length / 4; // 2 bytes per sample, 2 channels

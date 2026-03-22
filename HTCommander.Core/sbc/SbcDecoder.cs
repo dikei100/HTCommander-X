@@ -78,7 +78,7 @@ namespace HTCommander
                 return false;
 
             int frameSize = frame.GetFrameSize();
-            if (sbcData.Length < frameSize)
+            if (frameSize <= 0 || frameSize > 65536 || sbcData.Length < frameSize)
                 return false;
 
             // Verify CRC
