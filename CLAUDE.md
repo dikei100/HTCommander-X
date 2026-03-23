@@ -269,6 +269,81 @@ Both `index.html` and `mobile.html` include Content-Security-Policy meta tags re
 ### Thread safety
 `RadioAudioManager` uses `volatile` on all cross-thread fields (`transport`, `audioOutput`, `running`, `isConnecting`, `VoiceTransmitCancel`, `inAudioRun`, `_isMuted`, `_isAudioEnabled`, `PlayInputBack`); `StartTransmissionIfNeeded` uses `Interlocked.CompareExchange` on `_isTransmitting` to prevent double transmission start race. Voice transmission `TaskCompletionSource` (`newDataAvailable`) is protected by `newDataLock` to prevent race conditions between signal and reset that could cause transmission hangs. Both `OnTransmitVoicePCM` and `TransmitVoice` acquire `connectionLock` to prevent TOCTOU null reference races during disconnect. `Stop()` captures `audioLoopTask` under lock before waiting to prevent race with concurrent `Start()`. `Dispose()` uses `Interlocked.Exchange` on `_disposedFlag` for atomic double-dispose prevention. `TransmitVoice` validates `pcmOffset`/`pcmLength` bounds before `Buffer.BlockCopy`. `EscapeBytes` validates `len <= b.Length` before unsafe pointer operations. `StartRecording`/`StopRecording`/`DecodeSbcFrame` recording writes all use `recordingLock` to prevent race conditions between the audio loop thread and event dispatch; `_recording` is `volatile`; `StopRecording` nulls `_recorder` in a `finally` block to prevent use-after-dispose. `LinuxRadioBluetooth` uses `volatile` on `running` and `isConnecting` fields; `EnqueueWrite` captures `rfcommFd` under `connectionLock` to prevent TOCTOU race with concurrent `Disconnect()`, retries partial writes with EAGAIN handling to prevent GAIA protocol stream corruption; `CreateRfcommFd` validates `bdaddr` length before array access to prevent fd leaks on malformed input; `ConnectToGaiaChannel` wraps `VerifyGaiaResponse` in try/catch to always close the RFCOMM fd on exception. `LinuxRadioAudioTransport` uses `volatile` on `_isConnected` and `_disposed`; `nativeLock` serializes native buffer access in `ReadAsync`/`WriteAsync`/`Disconnect` to prevent use-after-free when `Disconnect()` frees `_readPtr`/`_writePtr` while I/O tasks are active; `errno` captured inside lock immediately after P/Invoke calls to prevent clobbering by concurrent I/O; pre-allocates native read/write buffers (4KB each) to avoid per-call `Marshal.AllocHGlobal` heap fragmentation; `ReadAsync` clamps `bytesRead` to both requested `count` and `buffer.Length - offset` before `Marshal.Copy` to prevent buffer overrun; `WriteAsync` validates `offset + count <= buffer.Length`; `CreateRfcommFd` validates `bdaddr` array length before access; `fcntl(F_GETFL)` return value is checked for errors before use (both in `LinuxRadioAudioTransport.ConnectAsync` and `LinuxRadioBluetooth.RunReadLoop` — the latter disconnects gracefully on failure). `RadioBluetoothWin` uses `volatile` on `running` and `isConnecting`; `OnConnected` fires via `ThreadPool.QueueUserWorkItem` to prevent Radio's initialization commands from blocking the read loop (matching Linux pattern). AX25Packet address count check (`>= 10`) is performed *before* adding to the list, preventing off-by-one that allowed 11 addresses. `TlsHttpServer` connection limit uses increment-then-check pattern (`Interlocked.Increment` first, then reject and decrement if > 100) to prevent race where multiple threads exceed the limit; `Stop()` uses `stopLock` + local variable capture to prevent TOCTOU on `cts`/`tcpListener`/`acceptTask`; `disposed` field is `volatile` for safe double-dispose check. `McpTools` PTT state (`mcpPttActive`, `mcpPttSilenceTimer`, `mcpPttTimeoutTimer`) protected by `mcpPttLock`; `mcpPttActive` is `volatile` for timer callback visibility; PTT auto-releases after 30s timeout via `McpPttTimeoutCallback` to prevent stuck transmit if MCP client disconnects. `WebAudioBridge` per-client `SemaphoreSlim` serializes `SendAsync` to prevent WebSocket framing corruption from concurrent sends, dropping frames for slow clients rather than queuing; rate limiting uses `ConcurrentDictionary.TryUpdate()` for atomic compare-and-swap to prevent concurrent frames bypassing the rate limit; `HandleAudioData` checks `pttOwner` under `pttLock` to prevent TOCTOU with concurrent PTT stop; PTT auto-releases after 30s of no audio from the owning client to prevent stuck PTT on disconnect; `DisconnectAll` disposes all per-client semaphores and clears rate-limit tracking. `AgwpeTcpClientHandler` constructor wraps `Task.Run` calls in try/catch to dispose on failure. `RigctldServer` uses `volatile` on shared fields (`pttActive`, `running`, `activeRadioId`); `SetPtt` uses `pttLock` to prevent race conditions on concurrent PTT toggling from multiple rigctld clients; PTT auto-releases after 30s timeout via `pttTimeoutTimer` to prevent stuck transmit on client disconnect; max 10 concurrent clients; auto-releases PTT when last client disconnects. `CatSerialServer` uses `volatile` on shared fields (`pttActive`, `running`, `activeRadioId`); `SetPtt` uses `pttLock` to prevent race conditions on concurrent PTT toggling; `commandBuffer` protected by `commandBufferLock` to prevent race conditions on concurrent `OnDataReceived` callbacks. `Radio.TncFragmentQueue` is consistently locked in `TransmitHardwareModem`, `ProcessTncQueue`, `HandleHtSendDataResponse`, `ClearTransmitQueue`, and `DeleteTransmitByTag`. `Radio.HandleBasicCommand` bounds-checks `value.Length` before accessing response fields (`WRITE_RF_CH` ≥ 6, `GET_VOLUME` ≥ 6, `READ_STATUS` ≥ 9). `SmtpServer` and `ImapServer` use `volatile` on `running` field for cross-thread visibility. `VirtualAudioBridge` uses `volatile` on `running` and `provider` fields. `WinRadioAudioTransport` uses `volatile` on `_isConnected` and `_disposed` fields. IMAP password comparison uses `CryptographicOperations.FixedTimeEquals()` to prevent timing attacks. `CatSerialServer` PTT auto-releases after 30s timeout via `pttTimeoutTimer` to prevent stuck transmit on serial port disconnect.
 
+## HTCommander-X Flutter Rewrite (`htcommander_flutter/`)
+
+Full Dart/Flutter rewrite targeting Linux desktop, Windows, and Android from a single codebase. Uses the "Signal Protocol" design system (dark base `#080a12`, cyan primary `#3cd7ff`, glassmorphism, Inter font). 102 source files, ~26K LOC, 98 tests.
+
+### Flutter Prerequisites
+
+**Flutter SDK** (stable, v3.41.5+) at `~/flutter`. Add to PATH: `export PATH="$HOME/flutter/bin:$PATH"`. Linux desktop build requires `ninja` and `gcc` (`sudo pacman -S ninja gcc` on Arch).
+
+### Flutter Build Commands
+
+```bash
+cd htcommander_flutter
+
+# Get dependencies
+flutter pub get
+
+# Analyze (must pass with zero issues)
+flutter analyze
+
+# Run all tests (98 tests)
+flutter test
+
+# Run single test file
+flutter test test/radio/ax25_test.dart
+
+# Run on Linux desktop
+flutter run -d linux
+
+# Build Linux release
+flutter build linux --release
+# Output: build/linux/x64/release/bundle/htcommander-x
+
+# Build Android APK
+flutter build apk
+```
+
+### Flutter Architecture
+
+**Startup sequence** (`main.dart`): `WidgetsFlutterBinding.ensureInitialized()` → `SharedPrefsSettingsStore.create()` → `DataBroker.initialize(store)` → `initializeDataHandlers()` (registers 14 handlers) → `runApp()`.
+
+**App shell** (`app.dart`): `AppShell` holds `Radio?` instance and `PlatformServices?`. On connect: creates `Radio(100, mac, platformServices)`, registers via `DataBroker.addDataHandler()`. Subscribes to AllDevices `State`/`Info`/`BatteryAsPercentage` for toolbar status. Platform detection: `Platform.isLinux` → `LinuxPlatformServices`.
+
+**Key directories**:
+- `core/` — DataBroker pub/sub, DataBrokerClient, SharedPreferences SettingsStore
+- `radio/` — GAIA state machine (`radio.dart`), SBC codec (`sbc/`), SSTV codec (`sstv/`), AX.25 (`ax25/`), APRS parser (`aprs/`), software modem, audio resampler, morse/DTMF engines
+- `handlers/` — 14 DataBroker handlers: FrameDeduplicator, PacketStore, AprsHandler, LogStore, MailStore, VoiceHandler, AudioClipHandler, TorrentHandler, BbsHandler, WinlinkClient, YappTransfer, + 4 server stubs
+- `servers/` — MCP (JSON-RPC 2.0), Web (static + WebSocket audio), Rigctld, AGWPE, SMTP, IMAP
+- `platform/linux/` — dart:ffi RFCOMM Bluetooth (`linux_bluetooth.dart` runs in Isolate), audio I/O (`linux_audio_service.dart` via paplay/parecord subprocesses)
+- `screens/` — 12 screens, all wired to DataBroker with live subscriptions in `initState()`
+- `widgets/` — VfoDisplay, PttButton, SignalBars, RadioStatusCard, GlassCard, SidebarNav
+- `dialogs/` — Channel editor/picker, quick frequency, QSO add/edit, station add/edit, compose mail
+
+### Flutter DataBroker Pattern (Same as C#)
+
+Components communicate via `DataBroker.dispatch(deviceId, name, data)` and `broker.subscribe(deviceId, name, callback)`. Device 0 = settings (auto-persisted), device 1 = app events, device 100+ = radios. Screens subscribe in `initState()` and call `setState()` in callbacks. Handlers create a `DataBrokerClient` in their constructor, subscribe to events, and self-initialize — matching `app_init.dart` → `initializeDataHandlers()`.
+
+### Flutter Linux Bluetooth (dart:ffi)
+
+`platform/linux/native_methods.dart` binds libc: `socket()`, `connect()`, `close()`, `read()`, `write()`, `fcntl()`, `poll()` with AF_BLUETOOTH=31, BTPROTO_RFCOMM=3. `linux_bluetooth.dart` runs the RFCOMM connection + read loop in a Dart Isolate (main isolate is single-threaded). Connection flow: `bluetoothctl connect` (ACL) → `sdptool browse` (SDP channel discovery) → RFCOMM socket per channel → GAIA GET_DEV_ID verification → O_NONBLOCK read loop with 50ms sleep (poll broken on RFCOMM). Isolate↔main communication via SendPort with `{'cmd':...}` / `{'event':...}` messages.
+
+### Flutter Audio Pipeline
+
+**RX**: BT audio RFCOMM → 0x7E deframe → SBC decode → PCM → `paplay` subprocess (mono→stereo duplication). **TX**: `parecord` subprocess (48kHz) → resample to 32kHz → SBC encode → 0x7E frame → BT audio RFCOMM. Audio service in `platform/linux/linux_audio_service.dart`.
+
+### Flutter-Specific Conventions
+
+- Import `radio/radio.dart` with `as ht` prefix to avoid clash with Flutter's `Radio` widget
+- Dart `int` is 64-bit — use `& 0xFFFFFFFF` for unsigned 32-bit behavior in bitwise ops
+- C# `byte[]` → Dart `Uint8List`, C# `short[]` → Dart `Int16List`
+- C# `SynchronizationContext.Post()` → Dart `Future.microtask()` (DataBroker callback dispatch)
+- C# `volatile`/`lock` → Dart main isolate is single-threaded; use `Completer` for async coordination
+- C# `Thread` → Dart `Isolate` (RFCOMM read loop) or `async`/`await`
+- SBC codec: 32kHz, 16 blocks, mono, loudness allocation, 8 subbands, bitpool 18
+- Settings use int 0/1 for booleans (cross-platform compat): `DataBroker.getValue<int>(0, key, 0) == 1`
+
 ## Related Projects
 
 - [khusmann/benlink](https://github.com/khusmann/benlink) — Python library for the same radios; reference for GAIA protocol, RFCOMM channel discovery, and audio codec details
