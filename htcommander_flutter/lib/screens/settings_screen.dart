@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
+import '../core/data_broker_client.dart';
 import '../widgets/glass_card.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -10,6 +12,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String _selectedCategory = 'General';
+  late final DataBrokerClient _broker;
 
   final List<_SettingsCategory> _categories = [
     _SettingsCategory('General', Icons.settings),
@@ -69,6 +72,108 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Modem
   String _modemMode = 'None';
+
+  // TextEditingControllers for persistent text fields
+  late final TextEditingController _callSignController;
+  late final TextEditingController _winlinkPasswordController;
+  late final TextEditingController _airplaneUrlController;
+  late final TextEditingController _gpsSerialPortController;
+  late final TextEditingController _repeaterBookCountryController;
+  late final TextEditingController _repeaterBookStateController;
+  late final TextEditingController _webServerPortController;
+  late final TextEditingController _agwpePortController;
+  late final TextEditingController _rigctldPortController;
+  late final TextEditingController _mcpServerPortController;
+
+  @override
+  void initState() {
+    super.initState();
+    _broker = DataBrokerClient();
+
+    // Load all settings from DataBroker device 0
+    _theme = DataBroker.getValue<String>(0, 'Theme', 'Dark');
+    _callSign = DataBroker.getValue<String>(0, 'CallSign', '');
+    _stationId = DataBroker.getValue<String>(0, 'StationId', 'Primary');
+    _allowTransmit = DataBroker.getValue<int>(0, 'AllowTransmit', 0) == 1;
+    _checkForUpdates =
+        DataBroker.getValue<int>(0, 'CheckForUpdates', 1) == 1;
+
+    _winlinkPassword =
+        DataBroker.getValue<String>(0, 'WinlinkPassword', '');
+
+    _webServerEnabled =
+        DataBroker.getValue<int>(0, 'WebServerEnabled', 0) == 1;
+    _webServerPort = DataBroker.getValue<int>(0, 'WebServerPort', 8080);
+    _agwpeEnabled =
+        DataBroker.getValue<int>(0, 'AgwpeServerEnabled', 0) == 1;
+    _agwpePort = DataBroker.getValue<int>(0, 'AgwpeServerPort', 8000);
+    _rigctldEnabled =
+        DataBroker.getValue<int>(0, 'RigctldServerEnabled', 0) == 1;
+    _rigctldPort = DataBroker.getValue<int>(0, 'RigctldServerPort', 4532);
+    _mcpServerEnabled =
+        DataBroker.getValue<int>(0, 'McpServerEnabled', 0) == 1;
+    _mcpServerPort = DataBroker.getValue<int>(0, 'McpServerPort', 5678);
+    _serverBindAll = DataBroker.getValue<int>(0, 'ServerBindAll', 0) == 1;
+    _tlsEnabled = DataBroker.getValue<int>(0, 'TlsEnabled', 0) == 1;
+
+    _airplaneUrl = DataBroker.getValue<String>(0, 'AirplaneUrl', '');
+    _gpsSerialPort =
+        DataBroker.getValue<String>(0, 'GpsSerialPort', '');
+    _gpsBaud = DataBroker.getValue<int>(0, 'GpsBaud', 9600);
+    _repeaterBookCountry =
+        DataBroker.getValue<String>(0, 'RepeaterBookCountry', 'United States');
+    _repeaterBookState =
+        DataBroker.getValue<String>(0, 'RepeaterBookState', '');
+
+    _volume = DataBroker.getValue<int>(0, 'Volume', 8).toDouble();
+    _squelch = DataBroker.getValue<int>(0, 'Squelch', 3).toDouble();
+    _outputVolume =
+        DataBroker.getValue<int>(0, 'OutputVolume', 75).toDouble();
+    _mute = DataBroker.getValue<int>(0, 'Mute', 0) == 1;
+    _micGain = DataBroker.getValue<int>(0, 'MicGain', 100).toDouble();
+
+    _modemMode = DataBroker.getValue<String>(0, 'ModemMode', 'None');
+
+    _language = DataBroker.getValue<String>(0, 'Language', 'English');
+    _ttsVoice = DataBroker.getValue<String>(0, 'TtsVoice', 'Default');
+    _whisperStt = DataBroker.getValue<int>(0, 'WhisperStt', 0) == 1;
+    _useStationId =
+        DataBroker.getValue<int>(0, 'UseStationIdAsWinlink', 0) == 1;
+
+    // Initialize text editing controllers with loaded values
+    _callSignController = TextEditingController(text: _callSign);
+    _winlinkPasswordController = TextEditingController(text: _winlinkPassword);
+    _airplaneUrlController = TextEditingController(text: _airplaneUrl);
+    _gpsSerialPortController = TextEditingController(text: _gpsSerialPort);
+    _repeaterBookCountryController =
+        TextEditingController(text: _repeaterBookCountry);
+    _repeaterBookStateController =
+        TextEditingController(text: _repeaterBookState);
+    _webServerPortController =
+        TextEditingController(text: _webServerPort.toString());
+    _agwpePortController =
+        TextEditingController(text: _agwpePort.toString());
+    _rigctldPortController =
+        TextEditingController(text: _rigctldPort.toString());
+    _mcpServerPortController =
+        TextEditingController(text: _mcpServerPort.toString());
+  }
+
+  @override
+  void dispose() {
+    _broker.dispose();
+    _callSignController.dispose();
+    _winlinkPasswordController.dispose();
+    _airplaneUrlController.dispose();
+    _gpsSerialPortController.dispose();
+    _repeaterBookCountryController.dispose();
+    _repeaterBookStateController.dispose();
+    _webServerPortController.dispose();
+    _agwpePortController.dispose();
+    _rigctldPortController.dispose();
+    _mcpServerPortController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -201,7 +306,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Theme',
                 _theme,
                 ['Auto', 'Light', 'Dark'],
-                (v) => setState(() => _theme = v),
+                (v) {
+                  setState(() => _theme = v);
+                  _broker.dispatch(0, 'Theme', v);
+                },
                 colors,
               ),
             ],
@@ -214,15 +322,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _sectionLabel('STATION IDENTITY', colors),
               const SizedBox(height: 12),
-              _textFieldRow('Call Sign', _callSign, 6, (v) {
-                setState(() => _callSign = v);
-              }, colors),
+              _textFieldRowWithController(
+                'Call Sign',
+                _callSignController,
+                6,
+                (v) {
+                  _callSign = v;
+                  _broker.dispatch(0, 'CallSign', v);
+                },
+                colors,
+              ),
               const SizedBox(height: 10),
               _dropdownRow(
                 'Station ID',
                 _stationId,
                 ['Primary', 'Secondary', 'Portable', 'Mobile'],
-                (v) => setState(() => _stationId = v),
+                (v) {
+                  setState(() => _stationId = v);
+                  _broker.dispatch(0, 'StationId', v);
+                },
                 colors,
               ),
             ],
@@ -238,7 +356,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _checkboxRow(
                 'Allow Transmit',
                 _allowTransmit,
-                (v) => setState(() => _allowTransmit = v),
+                (v) {
+                  setState(() => _allowTransmit = v);
+                  _broker.dispatch(0, 'AllowTransmit', v ? 1 : 0);
+                },
                 colors,
               ),
               if (_allowTransmit)
@@ -265,7 +386,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _checkboxRow(
                 'Check for Updates on Startup',
                 _checkForUpdates,
-                (v) => setState(() => _checkForUpdates = v),
+                (v) {
+                  setState(() => _checkForUpdates = v);
+                  _broker.dispatch(0, 'CheckForUpdates', v ? 1 : 0);
+                },
                 colors,
               ),
             ],
@@ -396,7 +520,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Language',
                 _language,
                 ['English', 'Spanish', 'French', 'German', 'Japanese'],
-                (v) => setState(() => _language = v),
+                (v) {
+                  setState(() => _language = v);
+                  _broker.dispatch(0, 'Language', v);
+                },
                 colors,
               ),
               const SizedBox(height: 10),
@@ -404,7 +531,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'TTS Voice',
                 _ttsVoice,
                 ['Default', 'Male', 'Female'],
-                (v) => setState(() => _ttsVoice = v),
+                (v) {
+                  setState(() => _ttsVoice = v);
+                  _broker.dispatch(0, 'TtsVoice', v);
+                },
                 colors,
               ),
             ],
@@ -420,7 +550,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _checkboxRow(
                 'Enable Whisper STT',
                 _whisperStt,
-                (v) => setState(() => _whisperStt = v),
+                (v) {
+                  setState(() => _whisperStt = v);
+                  _broker.dispatch(0, 'WhisperStt', v ? 1 : 0);
+                },
                 colors,
               ),
             ],
@@ -442,14 +575,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _sectionLabel('WINLINK AUTHENTICATION', colors),
               const SizedBox(height: 12),
-              _passwordFieldRow('Password', _winlinkPassword, (v) {
-                setState(() => _winlinkPassword = v);
-              }, colors),
+              _passwordFieldRowWithController(
+                'Password',
+                _winlinkPasswordController,
+                (v) {
+                  _winlinkPassword = v;
+                  _broker.dispatch(0, 'WinlinkPassword', v);
+                },
+                colors,
+              ),
               const SizedBox(height: 10),
               _checkboxRow(
                 'Use Station ID as Winlink Account',
                 _useStationId,
-                (v) => setState(() => _useStationId = v),
+                (v) {
+                  setState(() => _useStationId = v);
+                  _broker.dispatch(0, 'UseStationIdAsWinlink', v ? 1 : 0);
+                },
                 colors,
               ),
             ],
@@ -474,14 +616,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _checkboxRow(
                 'Bind to All Interfaces (LAN Access)',
                 _serverBindAll,
-                (v) => setState(() => _serverBindAll = v),
+                (v) {
+                  setState(() => _serverBindAll = v);
+                  _broker.dispatch(0, 'ServerBindAll', v ? 1 : 0);
+                },
                 colors,
               ),
               const SizedBox(height: 6),
               _checkboxRow(
                 'Enable TLS (HTTPS)',
                 _tlsEnabled,
-                (v) => setState(() => _tlsEnabled = v),
+                (v) {
+                  setState(() => _tlsEnabled = v);
+                  _broker.dispatch(0, 'TlsEnabled', v ? 1 : 0);
+                },
                 colors,
               ),
             ],
@@ -491,36 +639,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _buildServerCard(
           'WEB SERVER',
           _webServerEnabled,
-          _webServerPort,
-          (v) => setState(() => _webServerEnabled = v),
-          (v) => setState(() => _webServerPort = v),
+          _webServerPortController,
+          (v) {
+            setState(() => _webServerEnabled = v);
+            _broker.dispatch(0, 'WebServerEnabled', v ? 1 : 0);
+          },
+          (v) {
+            setState(() => _webServerPort = v);
+            _broker.dispatch(0, 'WebServerPort', v);
+          },
           colors,
         ),
         const SizedBox(height: 10),
         _buildServerCard(
           'AGWPE SERVER',
           _agwpeEnabled,
-          _agwpePort,
-          (v) => setState(() => _agwpeEnabled = v),
-          (v) => setState(() => _agwpePort = v),
+          _agwpePortController,
+          (v) {
+            setState(() => _agwpeEnabled = v);
+            _broker.dispatch(0, 'AgwpeServerEnabled', v ? 1 : 0);
+          },
+          (v) {
+            setState(() => _agwpePort = v);
+            _broker.dispatch(0, 'AgwpeServerPort', v);
+          },
           colors,
         ),
         const SizedBox(height: 10),
         _buildServerCard(
           'RIGCTLD SERVER',
           _rigctldEnabled,
-          _rigctldPort,
-          (v) => setState(() => _rigctldEnabled = v),
-          (v) => setState(() => _rigctldPort = v),
+          _rigctldPortController,
+          (v) {
+            setState(() => _rigctldEnabled = v);
+            _broker.dispatch(0, 'RigctldServerEnabled', v ? 1 : 0);
+          },
+          (v) {
+            setState(() => _rigctldPort = v);
+            _broker.dispatch(0, 'RigctldServerPort', v);
+          },
           colors,
         ),
         const SizedBox(height: 10),
         _buildServerCard(
           'MCP SERVER',
           _mcpServerEnabled,
-          _mcpServerPort,
-          (v) => setState(() => _mcpServerEnabled = v),
-          (v) => setState(() => _mcpServerPort = v),
+          _mcpServerPortController,
+          (v) {
+            setState(() => _mcpServerEnabled = v);
+            _broker.dispatch(0, 'McpServerEnabled', v ? 1 : 0);
+          },
+          (v) {
+            setState(() => _mcpServerPort = v);
+            _broker.dispatch(0, 'McpServerPort', v);
+          },
           colors,
         ),
       ],
@@ -530,7 +702,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildServerCard(
     String label,
     bool enabled,
-    int port,
+    TextEditingController portController,
     ValueChanged<bool> onEnabledChanged,
     ValueChanged<int> onPortChanged,
     ColorScheme colors,
@@ -554,7 +726,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(width: 16),
               SizedBox(
                 width: 120,
-                child: _portFieldRow('Port', port, onPortChanged, colors),
+                child: _portFieldRowWithController(
+                    'Port', portController, onPortChanged, colors),
               ),
             ],
           ),
@@ -575,11 +748,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _sectionLabel('AIRPLANE TRACKING', colors),
               const SizedBox(height: 12),
-              _textFieldRow(
+              _textFieldRowWithController(
                 'Tracking URL',
-                _airplaneUrl,
+                _airplaneUrlController,
                 null,
-                (v) => setState(() => _airplaneUrl = v),
+                (v) {
+                  _airplaneUrl = v;
+                  _broker.dispatch(0, 'AirplaneUrl', v);
+                },
                 colors,
               ),
             ],
@@ -592,11 +768,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _sectionLabel('GPS SERIAL', colors),
               const SizedBox(height: 12),
-              _textFieldRow(
+              _textFieldRowWithController(
                 'Serial Port',
-                _gpsSerialPort,
+                _gpsSerialPortController,
                 null,
-                (v) => setState(() => _gpsSerialPort = v),
+                (v) {
+                  _gpsSerialPort = v;
+                  _broker.dispatch(0, 'GpsSerialPort', v);
+                },
                 colors,
               ),
               const SizedBox(height: 10),
@@ -604,7 +783,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Baud Rate',
                 _gpsBaud.toString(),
                 ['4800', '9600', '19200', '38400', '57600', '115200'],
-                (v) => setState(() => _gpsBaud = int.tryParse(v) ?? 9600),
+                (v) {
+                  final parsed = int.tryParse(v) ?? 9600;
+                  setState(() => _gpsBaud = parsed);
+                  _broker.dispatch(0, 'GpsBaud', parsed);
+                },
                 colors,
               ),
             ],
@@ -617,19 +800,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _sectionLabel('REPEATERBOOK', colors),
               const SizedBox(height: 12),
-              _textFieldRow(
+              _textFieldRowWithController(
                 'Country',
-                _repeaterBookCountry,
+                _repeaterBookCountryController,
                 null,
-                (v) => setState(() => _repeaterBookCountry = v),
+                (v) {
+                  _repeaterBookCountry = v;
+                  _broker.dispatch(0, 'RepeaterBookCountry', v);
+                },
                 colors,
               ),
               const SizedBox(height: 10),
-              _textFieldRow(
+              _textFieldRowWithController(
                 'State / Province',
-                _repeaterBookState,
+                _repeaterBookStateController,
                 null,
-                (v) => setState(() => _repeaterBookState = v),
+                (v) {
+                  _repeaterBookState = v;
+                  _broker.dispatch(0, 'RepeaterBookState', v);
+                },
                 colors,
               ),
             ],
@@ -657,7 +846,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 0,
                 15,
                 15,
-                (v) => setState(() => _volume = v),
+                (v) {
+                  setState(() => _volume = v);
+                  _broker.dispatch(0, 'Volume', v.round());
+                },
                 colors,
                 valueLabel: _volume.round().toString(),
               ),
@@ -668,7 +860,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 0,
                 9,
                 9,
-                (v) => setState(() => _squelch = v),
+                (v) {
+                  setState(() => _squelch = v);
+                  _broker.dispatch(0, 'Squelch', v.round());
+                },
                 colors,
                 valueLabel: _squelch.round().toString(),
               ),
@@ -691,7 +886,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       0,
                       100,
                       20,
-                      (v) => setState(() => _outputVolume = v),
+                      (v) {
+                        setState(() => _outputVolume = v);
+                        _broker.dispatch(0, 'OutputVolume', v.round());
+                      },
                       colors,
                       valueLabel: '${_outputVolume.round()}%',
                     ),
@@ -711,7 +909,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 4),
                       Switch(
                         value: _mute,
-                        onChanged: (v) => setState(() => _mute = v),
+                        onChanged: (v) {
+                          setState(() => _mute = v);
+                          _broker.dispatch(0, 'Mute', v ? 1 : 0);
+                        },
                       ),
                     ],
                   ),
@@ -724,7 +925,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 0,
                 200,
                 10,
-                (v) => setState(() => _micGain = v),
+                (v) {
+                  setState(() => _micGain = v);
+                  _broker.dispatch(0, 'MicGain', v.round());
+                },
                 colors,
                 valueLabel: '${_micGain.round()}%',
               ),
@@ -751,7 +955,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Mode',
                 _modemMode,
                 ['None', 'AFSK 1200', 'PSK 2400', 'PSK 4800', 'G3RUH 9600'],
-                (v) => setState(() => _modemMode = v),
+                (v) {
+                  setState(() => _modemMode = v);
+                  _broker.dispatch(0, 'ModemMode', v);
+                },
                 colors,
               ),
             ],
@@ -822,9 +1029,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _textFieldRow(
+  Widget _textFieldRowWithController(
     String label,
-    String value,
+    TextEditingController controller,
     int? maxLength,
     ValueChanged<String> onChanged,
     ColorScheme colors,
@@ -847,7 +1054,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: SizedBox(
             height: 30,
             child: TextField(
-              controller: TextEditingController(text: value),
+              controller: controller,
               maxLength: maxLength,
               style: TextStyle(fontSize: 11, color: colors.onSurface),
               decoration: InputDecoration(
@@ -878,9 +1085,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _passwordFieldRow(
+  Widget _passwordFieldRowWithController(
     String label,
-    String value,
+    TextEditingController controller,
     ValueChanged<String> onChanged,
     ColorScheme colors,
   ) {
@@ -902,7 +1109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: SizedBox(
             height: 30,
             child: TextField(
-              controller: TextEditingController(text: value),
+              controller: controller,
               obscureText: true,
               style: TextStyle(fontSize: 11, color: colors.onSurface),
               decoration: InputDecoration(
@@ -932,9 +1139,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _portFieldRow(
+  Widget _portFieldRowWithController(
     String label,
-    int value,
+    TextEditingController controller,
     ValueChanged<int> onChanged,
     ColorScheme colors,
   ) {
@@ -954,7 +1161,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: SizedBox(
             height: 30,
             child: TextField(
-              controller: TextEditingController(text: value.toString()),
+              controller: controller,
               keyboardType: TextInputType.number,
               style: TextStyle(fontSize: 11, color: colors.onSurface),
               decoration: InputDecoration(

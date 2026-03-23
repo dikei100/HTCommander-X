@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
+import '../core/data_broker_client.dart';
+import '../radio/ax25/ax25_packet.dart';
 import '../widgets/glass_card.dart';
 
 class TerminalScreen extends StatefulWidget {
@@ -9,17 +12,104 @@ class TerminalScreen extends StatefulWidget {
 }
 
 class _TerminalScreenState extends State<TerminalScreen> {
+  final DataBrokerClient _broker = DataBrokerClient();
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  // Placeholder state — will be wired to DataBroker later
-  final bool _isConnected = false;
+  bool _isConnected = false;
   final List<String> _outputLines = [];
-  final List<String> _stations = [];
-  String? _selectedStation;
+  List<int> _radioDeviceIds = [];
+  int? _selectedRadioId;
+
+  @override
+  void initState() {
+    super.initState();
+    _broker.subscribe(
+        DataBroker.allDevices, 'UniqueDataFrame', _onUniqueDataFrame);
+    _broker.subscribe(DataBroker.allDevices, 'LockState', _onLockState);
+    _broker.subscribe(1, 'ConnectedRadios', _onConnectedRadios);
+  }
+
+  void _onUniqueDataFrame(int deviceId, String name, Object? data) {
+    if (!_isConnected) return;
+    if (data is! AX25Packet) return;
+    final packet = data;
+    final from =
+        packet.addresses.length > 1 ? packet.addresses[1].toString() : '?';
+    final dataStr = packet.dataStr ?? '';
+    setState(() {
+      _outputLines.add('[$from] $dataStr');
+    });
+    _scrollToBottom();
+  }
+
+  void _onLockState(int deviceId, String name, Object? data) {
+    if (data == null) {
+      if (_selectedRadioId == deviceId && _isConnected) {
+        setState(() {
+          _isConnected = false;
+        });
+      }
+      return;
+    }
+    if (data is Map) {
+      final usage = data['Usage'] as String? ?? '';
+      if (deviceId == _selectedRadioId) {
+        setState(() {
+          _isConnected = usage == 'Terminal';
+        });
+      }
+    }
+  }
+
+  void _onConnectedRadios(int deviceId, String name, Object? data) {
+    if (data is List) {
+      final ids = <int>[];
+      for (final radio in data) {
+        if (radio is Map && radio.containsKey('DeviceId')) {
+          ids.add(radio['DeviceId'] as int);
+        }
+      }
+      setState(() {
+        _radioDeviceIds = ids;
+        if (_selectedRadioId != null && !ids.contains(_selectedRadioId)) {
+          _selectedRadioId = null;
+        }
+      });
+    }
+  }
+
+  void _connect() {
+    if (_selectedRadioId == null) return;
+    _broker.dispatch(_selectedRadioId!, 'SetLock', {
+      'Usage': 'Terminal',
+      'RegionId': -1,
+      'ChannelId': -1,
+    });
+  }
+
+  void _disconnect() {
+    if (_selectedRadioId == null) return;
+    _broker.dispatch(_selectedRadioId!, 'SetUnlock', {
+      'Usage': 'Terminal',
+    });
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _broker.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -89,8 +179,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
               color: colors.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(4),
             ),
-            child: DropdownButton<String>(
-              value: _selectedStation,
+            child: DropdownButton<int>(
+              value: _selectedRadioId,
               hint: Text(
                 'Station',
                 style: TextStyle(fontSize: 11, color: colors.outline),
@@ -99,16 +189,19 @@ class _TerminalScreenState extends State<TerminalScreen> {
               isDense: true,
               dropdownColor: colors.surfaceContainerHigh,
               style: TextStyle(fontSize: 11, color: colors.onSurface),
-              items: _stations
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+              items: _radioDeviceIds
+                  .map((id) => DropdownMenuItem(
+                      value: id, child: Text('Radio $id')))
                   .toList(),
-              onChanged: (v) => setState(() => _selectedStation = v),
+              onChanged: (v) => setState(() => _selectedRadioId = v),
             ),
           ),
           const SizedBox(width: 6),
           _HeaderButton(
-            label: 'Connect',
-            onPressed: !_isConnected ? () {} : null,
+            label: _isConnected ? 'Disconnect' : 'Connect',
+            onPressed: _selectedRadioId != null
+                ? (_isConnected ? _disconnect : _connect)
+                : null,
           ),
         ],
       ),
@@ -218,6 +311,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
       _outputLines.add('> $text');
       _inputController.clear();
     });
+    _scrollToBottom();
   }
 }
 

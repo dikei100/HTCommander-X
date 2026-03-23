@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker_client.dart';
+import '../radio/models/radio_dev_info.dart';
+import '../radio/models/radio_ht_status.dart';
+import '../radio/models/radio_settings.dart';
+import '../radio/models/radio_channel_info.dart';
+import '../radio/models/radio_position.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/vfo_display.dart';
 import '../widgets/signal_bars.dart';
@@ -19,23 +25,124 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
   String _selectedMode = 'Chat';
   bool _isMuted = false;
 
-  // Placeholder state — will be wired to DataBroker in integration
-  final bool _isConnected = false;
-  final String? _deviceName = null;
-  final int _rssi = 0;
-  final bool _isTransmitting = false;
-  final int _batteryPercent = 0;
-  final bool _isGpsLocked = false;
-  final double _vfoAFreq = 0;
-  final double _vfoBFreq = 0;
-  final String _vfoAName = '';
-  final String _vfoBName = '';
+  // DataBroker wiring
+  late final DataBrokerClient _broker;
+
+  // Live state from DataBroker
+  bool _isConnected = false;
+  String? _deviceName;
+  int _rssi = 0;
+  bool _isTransmitting = false;
+  int _batteryPercent = 0;
+  bool _isGpsLocked = false;
+  double _vfoAFreq = 0;
+  double _vfoBFreq = 0;
+  String _vfoAName = '';
+  String _vfoBName = '';
   final List<String> _messages = [];
+
+  // Cached radio data for deriving VFO info
+  RadioSettings? _settings;
+  List<RadioChannelInfo?> _channels = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _broker = DataBrokerClient();
+
+    _broker.subscribe(100, 'State', _onState);
+    _broker.subscribe(100, 'Info', _onInfo);
+    _broker.subscribe(100, 'HtStatus', _onHtStatus);
+    _broker.subscribe(100, 'Settings', _onSettings);
+    _broker.subscribe(100, 'Channels', _onChannels);
+    _broker.subscribe(100, 'BatteryAsPercentage', _onBattery);
+    _broker.subscribe(100, 'Position', _onPosition);
+  }
 
   @override
   void dispose() {
+    _broker.dispose();
     _inputController.dispose();
     super.dispose();
+  }
+
+  void _onState(int deviceId, String name, Object? data) {
+    if (!mounted) return;
+    setState(() {
+      _isConnected = (data is String && data.toLowerCase() == 'connected');
+    });
+  }
+
+  void _onInfo(int deviceId, String name, Object? data) {
+    if (!mounted || data is! RadioDevInfo) return;
+    setState(() {
+      // Build a human-readable device name from product/vendor IDs
+      _deviceName = 'Radio ${data.productId}';
+    });
+  }
+
+  void _onHtStatus(int deviceId, String name, Object? data) {
+    if (!mounted || data is! RadioHtStatus) return;
+    setState(() {
+      _rssi = data.rssi;
+      _isTransmitting = data.isInTx;
+    });
+  }
+
+  void _onSettings(int deviceId, String name, Object? data) {
+    if (!mounted || data is! RadioSettings) return;
+    setState(() {
+      _settings = data;
+      _updateVfoFromChannels();
+    });
+  }
+
+  void _onChannels(int deviceId, String name, Object? data) {
+    if (!mounted || data is! List) return;
+    setState(() {
+      _channels = data.cast<RadioChannelInfo?>();
+      _updateVfoFromChannels();
+    });
+  }
+
+  void _onBattery(int deviceId, String name, Object? data) {
+    if (!mounted || data is! int) return;
+    setState(() {
+      _batteryPercent = data;
+    });
+  }
+
+  void _onPosition(int deviceId, String name, Object? data) {
+    if (!mounted || data is! RadioPosition) return;
+    setState(() {
+      _isGpsLocked = data.isGpsLocked;
+    });
+  }
+
+  void _updateVfoFromChannels() {
+    final settings = _settings;
+    if (settings == null) return;
+
+    final chA = settings.channelA;
+    final chB = settings.channelB;
+
+    if (chA >= 0 && chA < _channels.length && _channels[chA] != null) {
+      final ch = _channels[chA]!;
+      _vfoAFreq = ch.rxFreq / 1000000.0;
+      _vfoAName = ch.nameStr;
+    } else {
+      _vfoAFreq = 0;
+      _vfoAName = '';
+    }
+
+    if (chB >= 0 && chB < _channels.length && _channels[chB] != null) {
+      final ch = _channels[chB]!;
+      _vfoBFreq = ch.rxFreq / 1000000.0;
+      _vfoBName = ch.nameStr;
+    } else {
+      _vfoBFreq = 0;
+      _vfoBName = '';
+    }
   }
 
   @override
@@ -175,6 +282,8 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
                 isEnabled: _isConnected,
                 isTransmitting: _isTransmitting,
                 size: 72,
+                onPttStart: _onPttStart,
+                onPttStop: _onPttStop,
               ),
             ),
             const SizedBox(height: 8),
@@ -218,6 +327,15 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
         ),
       ),
     );
+  }
+
+  void _onPttStart() {
+    // Placeholder — will dispatch TransmitVoicePCM when audio pipeline is ready
+    _broker.dispatch(100, 'TransmitVoicePCM', null, store: false);
+  }
+
+  void _onPttStop() {
+    // No-op for now — PTT release handled by audio pipeline
   }
 
   Widget _buildContentArea(ColorScheme colors) {
@@ -466,6 +584,8 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
   void _sendMessage() {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
+    // Dispatch chat message via DataBroker
+    _broker.dispatch(1, 'Chat', text, store: false);
     setState(() {
       _messages.add(text);
       _inputController.clear();

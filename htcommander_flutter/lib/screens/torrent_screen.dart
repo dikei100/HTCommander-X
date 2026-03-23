@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker_client.dart';
+import '../handlers/torrent_handler.dart';
 import '../widgets/glass_card.dart';
 
 class TorrentScreen extends StatefulWidget {
@@ -9,10 +11,49 @@ class TorrentScreen extends StatefulWidget {
 }
 
 class _TorrentScreenState extends State<TorrentScreen> {
-  // Placeholder state — will be wired to DataBroker later
-  final bool _isActive = false;
-  final List<_TorrentEntry> _torrents = [];
+  final DataBrokerClient _broker = DataBrokerClient();
+  bool _isActive = false;
+  List<TorrentFile> _torrents = [];
   int? _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _broker.subscribe(1, 'TorrentFiles', _onTorrentFiles);
+  }
+
+  void _onTorrentFiles(int deviceId, String name, Object? data) {
+    if (data is List<TorrentFile>) {
+      setState(() {
+        _torrents = data;
+        if (_selectedIndex != null && _selectedIndex! >= _torrents.length) {
+          _selectedIndex = null;
+        }
+      });
+    }
+  }
+
+  void _addFile() {
+    // Placeholder: in the future, open a file picker and dispatch TorrentAddFile
+  }
+
+  void _activate() {
+    setState(() {
+      _isActive = !_isActive;
+    });
+  }
+
+  String _formatSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  @override
+  void dispose() {
+    _broker.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,11 +110,11 @@ class _TorrentScreenState extends State<TorrentScreen> {
             ),
           ),
           const Spacer(),
-          _HeaderButton(label: 'Add File', onPressed: () {}),
+          _HeaderButton(label: 'Add File', onPressed: _addFile),
           const SizedBox(width: 6),
           _HeaderButton(
-            label: 'Activate',
-            onPressed: !_isActive ? () {} : null,
+            label: _isActive ? 'Deactivate' : 'Activate',
+            onPressed: _activate,
           ),
         ],
       ),
@@ -111,10 +152,6 @@ class _TorrentScreenState extends State<TorrentScreen> {
                           Text('FILE', style: _columnHeaderStyle(colors)),
                     ),
                     DataColumn(
-                      label: Text('SOURCE',
-                          style: _columnHeaderStyle(colors)),
-                    ),
-                    DataColumn(
                       label:
                           Text('MODE', style: _columnHeaderStyle(colors)),
                     ),
@@ -142,13 +179,11 @@ class _TorrentScreenState extends State<TorrentScreen> {
                       },
                       cells: [
                         DataCell(
-                            Text(t.file, style: _cellStyle(colors))),
-                        DataCell(
-                            Text(t.source, style: _cellStyle(colors))),
+                            Text(t.fileName, style: _cellStyle(colors))),
                         DataCell(
                             Text(t.mode, style: _cellStyle(colors))),
                         DataCell(
-                            Text(t.size, style: _cellStyle(colors))),
+                            Text(_formatSize(t.fileSize), style: _cellStyle(colors))),
                         DataCell(
                           SizedBox(
                             width: 120,
@@ -207,22 +242,6 @@ class _TorrentScreenState extends State<TorrentScreen> {
       color: colors.onSurface,
     );
   }
-}
-
-class _TorrentEntry {
-  final String file;
-  final String source;
-  final String mode;
-  final String size;
-  final double progress;
-
-  const _TorrentEntry({
-    required this.file,
-    required this.source,
-    required this.mode,
-    required this.size,
-    required this.progress,
-  });
 }
 
 class _HeaderButton extends StatelessWidget {

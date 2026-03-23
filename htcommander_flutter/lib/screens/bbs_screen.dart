@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker_client.dart';
+import '../handlers/bbs_handler.dart';
 import '../widgets/glass_card.dart';
 
 class BbsScreen extends StatefulWidget {
@@ -9,17 +11,65 @@ class BbsScreen extends StatefulWidget {
 }
 
 class _BbsScreenState extends State<BbsScreen> {
+  final DataBrokerClient _broker = DataBrokerClient();
   final ScrollController _trafficScrollController = ScrollController();
 
-  // Placeholder state — will be wired to DataBroker later
-  final bool _isActive = false;
+  bool _isActive = false;
   bool _viewTraffic = false;
-  final List<_BbsNodeEntry> _nodes = [];
+  List<BbsStation> _nodes = [];
   final List<String> _trafficLog = [];
   int? _selectedIndex;
 
   @override
+  void initState() {
+    super.initState();
+    _broker.subscribe(1, 'BbsList', _onBbsList);
+    _broker.subscribe(1, 'BbsCreated', _onBbsCreated);
+    _broker.subscribe(1, 'BbsRemoved', _onBbsRemoved);
+  }
+
+  void _onBbsList(int deviceId, String name, Object? data) {
+    if (data is List<BbsStation>) {
+      setState(() {
+        _nodes = data;
+        if (_selectedIndex != null && _selectedIndex! >= _nodes.length) {
+          _selectedIndex = null;
+        }
+      });
+    }
+  }
+
+  void _onBbsCreated(int deviceId, String name, Object? data) {
+    setState(() {
+      _isActive = true;
+    });
+  }
+
+  void _onBbsRemoved(int deviceId, String name, Object? data) {
+    if (_nodes.isEmpty) {
+      setState(() {
+        _isActive = false;
+      });
+    }
+  }
+
+  void _activate() {
+    _broker.dispatch(1, 'CreateBbs', 'BBS', store: false);
+  }
+
+  void _deactivate() {
+    _broker.dispatch(1, 'RemoveBbs', 'BBS', store: false);
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')}:'
+        '${time.second.toString().padLeft(2, '0')}';
+  }
+
+  @override
   void dispose() {
+    _broker.dispose();
     _trafficScrollController.dispose();
     super.dispose();
   }
@@ -121,8 +171,8 @@ class _BbsScreenState extends State<BbsScreen> {
           ),
           const SizedBox(width: 12),
           _HeaderButton(
-            label: 'Activate',
-            onPressed: !_isActive ? () {} : null,
+            label: _isActive ? 'Deactivate' : 'Activate',
+            onPressed: _isActive ? _deactivate : _activate,
           ),
         ],
       ),
@@ -200,7 +250,7 @@ class _BbsScreenState extends State<BbsScreen> {
                       cells: [
                         DataCell(Text(n.callSign,
                             style: _cellStyle(colors))),
-                        DataCell(Text(n.lastSeen,
+                        DataCell(Text(_formatTime(n.lastSeen),
                             style: _cellStyle(colors))),
                         DataCell(Text('${n.packetsIn}',
                             style: _cellStyle(colors))),
@@ -286,24 +336,6 @@ class _BbsScreenState extends State<BbsScreen> {
       color: colors.onSurface,
     );
   }
-}
-
-class _BbsNodeEntry {
-  final String callSign;
-  final String lastSeen;
-  final int packetsIn;
-  final int packetsOut;
-  final int bytesIn;
-  final int bytesOut;
-
-  const _BbsNodeEntry({
-    required this.callSign,
-    required this.lastSeen,
-    required this.packetsIn,
-    required this.packetsOut,
-    required this.bytesIn,
-    required this.bytesOut,
-  });
 }
 
 class _HeaderButton extends StatelessWidget {

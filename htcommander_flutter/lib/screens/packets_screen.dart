@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
+import '../core/data_broker_client.dart';
+import '../handlers/packet_store.dart';
+import '../radio/ax25/ax25_packet.dart';
 import '../widgets/glass_card.dart';
 
 class PacketsScreen extends StatefulWidget {
@@ -9,9 +13,63 @@ class PacketsScreen extends StatefulWidget {
 }
 
 class _PacketsScreenState extends State<PacketsScreen> {
-  // Placeholder data — will be wired to DataBroker later
-  final List<_PacketEntry> _packets = [];
+  final DataBrokerClient _broker = DataBrokerClient();
+  List<AX25Packet> _packets = [];
   int? _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _broker.subscribe(1, 'PacketStoreUpdated', _onPacketStoreUpdated);
+    // Load initial data
+    _loadPackets();
+  }
+
+  void _loadPackets() {
+    final store = DataBroker.getDataHandlerTyped<PacketStore>('PacketStore');
+    if (store != null) {
+      setState(() {
+        _packets = store.packets;
+      });
+    }
+  }
+
+  void _onPacketStoreUpdated(int deviceId, String name, Object? data) {
+    _loadPackets();
+  }
+
+  @override
+  void dispose() {
+    _broker.dispose();
+    super.dispose();
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')}:'
+        '${time.second.toString().padLeft(2, '0')}';
+  }
+
+  String _getFrameTypeName(AX25Packet p) {
+    if (p.type == FrameType.iFrame) return 'I';
+    if (p.type == FrameType.uFrameUI) return 'UI';
+    if (p.type == FrameType.uFrameSABM) return 'SABM';
+    if (p.type == FrameType.uFrameSABME) return 'SABME';
+    if (p.type == FrameType.uFrameDISC) return 'DISC';
+    if (p.type == FrameType.uFrameDM) return 'DM';
+    if (p.type == FrameType.uFrameUA) return 'UA';
+    if (p.type == FrameType.uFrameFRMR) return 'FRMR';
+    if (p.type == FrameType.uFrameXID) return 'XID';
+    if (p.type == FrameType.uFrameTEST) return 'TEST';
+    if ((p.type & FrameType.uFrame) == FrameType.sFrame) {
+      if (p.type == FrameType.sFrameRR) return 'RR';
+      if (p.type == FrameType.sFrameRNR) return 'RNR';
+      if (p.type == FrameType.sFrameREJ) return 'REJ';
+      if (p.type == FrameType.sFrameSREJ) return 'SREJ';
+      return 'S';
+    }
+    return 'U';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -126,6 +184,12 @@ class _PacketsScreenState extends State<PacketsScreen> {
                   rows: List.generate(_packets.length, (i) {
                     final p = _packets[i];
                     final selected = _selectedIndex == i;
+                    final from = p.addresses.length > 1
+                        ? p.addresses[1].toString()
+                        : '';
+                    final to = p.addresses.isNotEmpty
+                        ? p.addresses[0].toString()
+                        : '';
                     return DataRow(
                       selected: selected,
                       color: selected
@@ -138,16 +202,16 @@ class _PacketsScreenState extends State<PacketsScreen> {
                       },
                       cells: [
                         DataCell(
-                            Text(p.time, style: _cellStyle(colors))),
+                            Text(_formatTime(p.time), style: _cellStyle(colors))),
                         DataCell(
-                            Text(p.from, style: _cellStyle(colors))),
-                        DataCell(Text(p.to, style: _cellStyle(colors))),
+                            Text(from, style: _cellStyle(colors))),
+                        DataCell(Text(to, style: _cellStyle(colors))),
                         DataCell(
-                            Text(p.type, style: _cellStyle(colors))),
-                        DataCell(Text(p.channel,
+                            Text(_getFrameTypeName(p), style: _cellStyle(colors))),
+                        DataCell(Text(p.channelName,
                             style: _cellStyle(colors))),
                         DataCell(Text(
-                          p.dataHex,
+                          p.dataStr ?? '',
                           style: _cellMonoStyle(colors),
                           overflow: TextOverflow.ellipsis,
                         )),
@@ -162,7 +226,9 @@ class _PacketsScreenState extends State<PacketsScreen> {
 
   Widget _buildDecodePanel(ColorScheme colors) {
     final packet =
-        _selectedIndex != null ? _packets[_selectedIndex!] : null;
+        _selectedIndex != null && _selectedIndex! < _packets.length
+            ? _packets[_selectedIndex!]
+            : null;
 
     return GlassCard(
       child: Column(
@@ -198,11 +264,11 @@ class _PacketsScreenState extends State<PacketsScreen> {
                     )
                   : SingleChildScrollView(
                       child: Text(
-                        'From: ${packet.from}\n'
-                        'To: ${packet.to}\n'
-                        'Type: ${packet.type}\n'
-                        'Channel: ${packet.channel}\n'
-                        'Data: ${packet.dataHex}',
+                        'From: ${packet.addresses.length > 1 ? packet.addresses[1].toString() : ''}\n'
+                        'To: ${packet.addresses.isNotEmpty ? packet.addresses[0].toString() : ''}\n'
+                        'Type: ${_getFrameTypeName(packet)}\n'
+                        'Channel: ${packet.channelName}\n'
+                        'Data: ${packet.dataStr ?? ''}',
                         style: TextStyle(
                           fontSize: 11,
                           fontFamily: 'monospace',
@@ -241,22 +307,4 @@ class _PacketsScreenState extends State<PacketsScreen> {
       color: colors.onSurface,
     );
   }
-}
-
-class _PacketEntry {
-  final String time;
-  final String from;
-  final String to;
-  final String type;
-  final String channel;
-  final String dataHex;
-
-  const _PacketEntry({
-    required this.time,
-    required this.from,
-    required this.to,
-    required this.type,
-    required this.channel,
-    required this.dataHex,
-  });
 }

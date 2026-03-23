@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
+import '../core/data_broker_client.dart';
+import '../handlers/log_store.dart';
 
 class DebugScreen extends StatefulWidget {
   const DebugScreen({super.key});
@@ -11,32 +14,67 @@ class _DebugScreenState extends State<DebugScreen> {
   bool _showBtFrames = false;
   bool _showLoopback = false;
   final ScrollController _scrollController = ScrollController();
+  late final DataBrokerClient _broker;
+  List<String> _logLines = [];
 
-  // Placeholder debug log
-  final String _debugLog = '''[14:32:15.123] Radio connected: VR-N76 (00:11:22:33:44:55)
-[14:32:15.145] GAIA TX: FF 01 00 04 00 03 00 01
-[14:32:15.198] GAIA RX: FF 01 80 0C 00 03 00 01 56 52 2D 4E 37 36 00 00
-[14:32:15.201] Device info received: VR-N76, FW 2.01
-[14:32:15.250] GAIA TX: FF 01 00 04 00 02 00 02
-[14:32:15.312] GAIA RX: FF 01 80 20 00 02 00 02 ...
-[14:32:15.315] Settings received: volume=8, squelch=3, vfo_a=ch0
-[14:32:15.400] GAIA TX: FF 01 00 04 00 02 00 10
-[14:32:15.468] GAIA RX: FF 01 80 08 00 02 00 10 00 00 00 05
-[14:32:15.470] HT Status: RSSI=5, TX=0
-[14:32:16.012] Audio transport connected on RFCOMM channel 2
-[14:32:16.050] SBC decoder initialized: 32kHz, mono, 8 subbands
-[14:32:18.105] GAIA TX: FF 01 00 04 00 02 00 03
-[14:32:18.172] GAIA RX: FF 01 80 40 00 02 00 03 ...
-[14:32:18.175] Channel list received: 128 channels
-[14:32:20.300] GPS position update: 41.7147N, 72.7272W
-[14:32:25.500] RSSI update: level=7
-[14:32:30.501] RSSI update: level=6
-[14:32:35.502] RSSI update: level=8''';
+  @override
+  void initState() {
+    super.initState();
+    _broker = DataBrokerClient();
+
+    // Subscribe to live log events
+    _broker.subscribe(1, 'LogInfo', _onLogInfo);
+    _broker.subscribe(1, 'LogError', _onLogError);
+
+    // Load existing entries from LogStore if registered
+    final logStore = DataBroker.getDataHandlerTyped<LogStore>('LogStore');
+    if (logStore != null) {
+      _logLines = logStore.entries
+          .map((e) => '[${_formatTime(e.time)}] ${e.level}: ${e.message}')
+          .toList();
+    }
+  }
 
   @override
   void dispose() {
+    _broker.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onLogInfo(int deviceId, String name, Object? data) {
+    if (!mounted || data is! String) return;
+    setState(() {
+      _logLines.add('[${_formatTime(DateTime.now())}] Info: $data');
+    });
+    _scrollToBottom();
+  }
+
+  void _onLogError(int deviceId, String name, Object? data) {
+    if (!mounted || data is! String) return;
+    setState(() {
+      _logLines.add('[${_formatTime(DateTime.now())}] Error: $data');
+    });
+    _scrollToBottom();
+  }
+
+  String _formatTime(DateTime t) {
+    return '${t.hour.toString().padLeft(2, '0')}:'
+        '${t.minute.toString().padLeft(2, '0')}:'
+        '${t.second.toString().padLeft(2, '0')}.'
+        '${t.millisecond.toString().padLeft(3, '0')}';
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -77,8 +115,11 @@ class _DebugScreenState extends State<DebugScreen> {
               children: [
                 Checkbox(
                   value: _showBtFrames,
-                  onChanged: (v) =>
-                      setState(() => _showBtFrames = v ?? false),
+                  onChanged: (v) {
+                    final val = v ?? false;
+                    setState(() => _showBtFrames = val);
+                    _broker.dispatch(0, 'BluetoothFramesDebug', val ? 1 : 0);
+                  },
                   visualDensity: const VisualDensity(
                     horizontal: -4,
                     vertical: -4,
@@ -104,8 +145,11 @@ class _DebugScreenState extends State<DebugScreen> {
               children: [
                 Checkbox(
                   value: _showLoopback,
-                  onChanged: (v) =>
-                      setState(() => _showLoopback = v ?? false),
+                  onChanged: (v) {
+                    final val = v ?? false;
+                    setState(() => _showLoopback = val);
+                    _broker.dispatch(1, 'LoopbackMode', val ? 1 : 0);
+                  },
                   visualDensity: const VisualDensity(
                     horizontal: -4,
                     vertical: -4,
@@ -125,7 +169,13 @@ class _DebugScreenState extends State<DebugScreen> {
           ),
           const SizedBox(width: 16),
           OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              setState(() => _logLines.clear());
+              // Also clear the LogStore if available
+              final logStore =
+                  DataBroker.getDataHandlerTyped<LogStore>('LogStore');
+              logStore?.clearLogs();
+            },
             icon: const Icon(Icons.delete_outline, size: 14),
             label: const Text('CLEAR'),
             style: OutlinedButton.styleFrom(
@@ -167,6 +217,8 @@ class _DebugScreenState extends State<DebugScreen> {
   }
 
   Widget _buildLogArea(ColorScheme colors) {
+    final logText = _logLines.join('\n');
+
     return Container(
       margin: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -183,7 +235,7 @@ class _DebugScreenState extends State<DebugScreen> {
           controller: _scrollController,
           padding: const EdgeInsets.all(12),
           child: SelectableText(
-            _debugLog,
+            logText.isEmpty ? 'No log entries yet.' : logText,
             style: TextStyle(
               fontSize: 11,
               fontFamily: 'monospace',

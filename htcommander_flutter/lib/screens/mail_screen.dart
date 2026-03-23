@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
+import '../core/data_broker_client.dart';
+import '../handlers/mail_store.dart';
 import '../widgets/glass_card.dart';
 
 class MailScreen extends StatefulWidget {
@@ -9,8 +12,10 @@ class MailScreen extends StatefulWidget {
 }
 
 class _MailScreenState extends State<MailScreen> {
+  final DataBrokerClient _broker = DataBrokerClient();
   String _selectedFolder = 'Inbox';
   int _selectedMailIndex = -1;
+  List<WinlinkMail> _allMails = [];
 
   final List<String> _folders = [
     'Inbox',
@@ -30,30 +35,49 @@ class _MailScreenState extends State<MailScreen> {
     'Trash': Icons.delete,
   };
 
-  // Placeholder mail data
-  final List<_MailEntry> _mails = [
-    _MailEntry(
-      from: 'W1AW',
-      subject: 'Weekly bulletin #2847',
-      date: '2026-03-22 14:30',
-      body:
-          'DE W1AW\r\nARRL BULLETIN 2847\r\n\r\nThis is a sample weekly bulletin message.\r\nPlease check your local repeater schedule.',
-    ),
-    _MailEntry(
-      from: 'KD2ABC',
-      subject: 'Re: Net check-in schedule',
-      date: '2026-03-21 09:15',
-      body:
-          'Hi,\r\n\r\nThanks for the updated schedule.\r\nI will be available on Thursday evening.\r\n\r\n73,\r\nKD2ABC',
-    ),
-    _MailEntry(
-      from: 'N0CALL',
-      subject: 'Winlink test message',
-      date: '2026-03-20 16:45',
-      body:
-          'This is a test message sent via Winlink.\r\nPlease confirm receipt.\r\n\r\n73 de N0CALL',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _broker.subscribe(1, 'Mails', _onMails);
+    // Load initial data from store
+    final store = DataBroker.getDataHandlerTyped<MailStore>('MailStore');
+    if (store != null) {
+      _allMails = store.getAllMails();
+    }
+  }
+
+  void _onMails(int deviceId, String name, Object? data) {
+    if (data is List<WinlinkMail>) {
+      setState(() {
+        _allMails = data;
+        // Reset selection if out of bounds
+        final filtered = _filteredMails;
+        if (_selectedMailIndex >= filtered.length) {
+          _selectedMailIndex = -1;
+        }
+      });
+    }
+  }
+
+  List<WinlinkMail> get _filteredMails =>
+      _allMails.where((m) => m.folder == _selectedFolder).toList();
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _checkForMail() {
+    _broker.dispatch(1, 'WinlinkSync', null, store: false);
+  }
+
+  @override
+  void dispose() {
+    _broker.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +160,7 @@ class _MailScreenState extends State<MailScreen> {
           ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: _checkForMail,
             icon: const Icon(Icons.refresh, size: 14),
             label: const Text('CHECK FOR MAIL'),
             style: OutlinedButton.styleFrom(
@@ -219,6 +243,8 @@ class _MailScreenState extends State<MailScreen> {
   }
 
   Widget _buildMailContent(ColorScheme colors) {
+    final mails = _filteredMails;
+
     return Padding(
       padding: const EdgeInsets.all(10),
       child: Column(
@@ -269,8 +295,8 @@ class _MailScreenState extends State<MailScreen> {
                             DataColumn(label: Text('SUBJECT')),
                             DataColumn(label: Text('DATE')),
                           ],
-                          rows: List.generate(_mails.length, (index) {
-                            final mail = _mails[index];
+                          rows: List.generate(mails.length, (index) {
+                            final mail = mails[index];
                             final isSelected =
                                 index == _selectedMailIndex;
                             return DataRow(
@@ -291,7 +317,7 @@ class _MailScreenState extends State<MailScreen> {
                               cells: [
                                 DataCell(Text(mail.from)),
                                 DataCell(Text(mail.subject)),
-                                DataCell(Text(mail.date)),
+                                DataCell(Text(_formatDate(mail.date))),
                               ],
                             );
                           }),
@@ -334,9 +360,10 @@ class _MailScreenState extends State<MailScreen> {
                         color: colors.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: _selectedMailIndex >= 0
+                      child: _selectedMailIndex >= 0 &&
+                              _selectedMailIndex < mails.length
                           ? SelectableText(
-                              _mails[_selectedMailIndex].body,
+                              mails[_selectedMailIndex].body,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontFamily: 'monospace',
@@ -363,18 +390,4 @@ class _MailScreenState extends State<MailScreen> {
       ),
     );
   }
-}
-
-class _MailEntry {
-  const _MailEntry({
-    required this.from,
-    required this.subject,
-    required this.date,
-    required this.body,
-  });
-
-  final String from;
-  final String subject;
-  final String date;
-  final String body;
 }

@@ -1,5 +1,36 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
+import '../core/data_broker_client.dart';
 import '../widgets/glass_card.dart';
+
+class ContactEntry {
+  String callsign;
+  String name;
+  String type;
+  String description;
+
+  ContactEntry({
+    required this.callsign,
+    required this.name,
+    required this.type,
+    required this.description,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'callsign': callsign,
+        'name': name,
+        'type': type,
+        'description': description,
+      };
+
+  factory ContactEntry.fromJson(Map<String, dynamic> json) => ContactEntry(
+        callsign: json['callsign'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        type: json['type'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+      );
+}
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -9,9 +40,80 @@ class ContactsScreen extends StatefulWidget {
 }
 
 class _ContactsScreenState extends State<ContactsScreen> {
-  // Placeholder data — will be wired to DataBroker later
-  final List<_ContactEntry> _contacts = [];
+  final DataBrokerClient _broker = DataBrokerClient();
+  List<ContactEntry> _contacts = [];
   int? _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _broker.subscribe(0, 'Contacts', _onContacts);
+    _loadContacts();
+  }
+
+  void _loadContacts() {
+    final raw = DataBroker.getValue<String>(0, 'Contacts', '');
+    if (raw.isNotEmpty) {
+      try {
+        final list = jsonDecode(raw) as List;
+        setState(() {
+          _contacts = list
+              .map((e) => ContactEntry.fromJson(e as Map<String, dynamic>))
+              .toList();
+        });
+      } catch (_) {
+        // Ignore malformed data
+      }
+    }
+  }
+
+  void _onContacts(int deviceId, String name, Object? data) {
+    if (data is String) {
+      try {
+        final list = jsonDecode(data) as List;
+        setState(() {
+          _contacts = list
+              .map((e) => ContactEntry.fromJson(e as Map<String, dynamic>))
+              .toList();
+        });
+      } catch (_) {
+        // Ignore malformed data
+      }
+    }
+  }
+
+  void _saveContacts() {
+    final json = jsonEncode(_contacts.map((c) => c.toJson()).toList());
+    DataBroker.dispatch(0, 'Contacts', json);
+  }
+
+  void _addContact() {
+    setState(() {
+      _contacts.add(ContactEntry(
+        callsign: '',
+        name: '',
+        type: '',
+        description: '',
+      ));
+      _selectedIndex = _contacts.length - 1;
+    });
+    _saveContacts();
+  }
+
+  void _removeContact() {
+    if (_selectedIndex == null || _selectedIndex! >= _contacts.length) return;
+    setState(() {
+      _contacts.removeAt(_selectedIndex!);
+      _selectedIndex = null;
+    });
+    _saveContacts();
+  }
+
+  @override
+  void dispose() {
+    _broker.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +170,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
             ),
           ),
           const Spacer(),
-          _HeaderButton(label: 'Add', onPressed: () {}),
+          _HeaderButton(label: 'Add', onPressed: _addContact),
           const SizedBox(width: 6),
           _HeaderButton(
             label: 'Edit',
@@ -77,7 +179,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
           const SizedBox(width: 6),
           _HeaderButton(
             label: 'Remove',
-            onPressed: _selectedIndex != null ? () {} : null,
+            onPressed: _selectedIndex != null ? _removeContact : null,
           ),
         ],
       ),
@@ -168,7 +270,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Widget _buildDetailCard(ColorScheme colors) {
     final contact =
-        _selectedIndex != null ? _contacts[_selectedIndex!] : null;
+        _selectedIndex != null && _selectedIndex! < _contacts.length
+            ? _contacts[_selectedIndex!]
+            : null;
 
     return GlassCard(
       child: Column(
@@ -236,20 +340,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
       color: colors.onSurface,
     );
   }
-}
-
-class _ContactEntry {
-  final String callsign;
-  final String name;
-  final String type;
-  final String description;
-
-  const _ContactEntry({
-    required this.callsign,
-    required this.name,
-    required this.type,
-    required this.description,
-  });
 }
 
 class _DetailField extends StatelessWidget {

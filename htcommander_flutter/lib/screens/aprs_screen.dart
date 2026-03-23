@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
+import '../core/data_broker_client.dart';
+import '../handlers/aprs_handler.dart';
 import '../widgets/glass_card.dart';
 
 class AprsScreen extends StatefulWidget {
@@ -9,6 +12,7 @@ class AprsScreen extends StatefulWidget {
 }
 
 class _AprsScreenState extends State<AprsScreen> {
+  final DataBrokerClient _broker = DataBrokerClient();
   bool _showAll = false;
   bool _showWarning = true;
   String _selectedRoute = 'WIDE1-1,WIDE2-1';
@@ -22,50 +26,42 @@ class _AprsScreenState extends State<AprsScreen> {
     'Direct',
   ];
 
-  // Placeholder APRS data
-  final List<_AprsEntry> _entries = [
-    _AprsEntry(
-      time: '14:32:15',
-      from: 'W1AW-9',
-      to: 'APRS',
-      type: 'Position',
-      message: '41.7147N 072.7272W /A=000150',
-    ),
-    _AprsEntry(
-      time: '14:30:42',
-      from: 'KD2ABC-7',
-      to: 'APRS',
-      type: 'Status',
-      message: 'Mobile on I-95 North',
-    ),
-    _AprsEntry(
-      time: '14:28:03',
-      from: 'N0CALL-1',
-      to: 'BLN1',
-      type: 'Bulletin',
-      message: 'Weekly net tonight 7:30 PM local',
-    ),
-    _AprsEntry(
-      time: '14:25:11',
-      from: 'WX4NHC',
-      to: 'APRS',
-      type: 'Weather',
-      message: 'T078 R000 P000 H55 B10152',
-    ),
-    _AprsEntry(
-      time: '14:22:30',
-      from: 'KE5ABC-9',
-      to: 'W1AW-9',
-      type: 'Message',
-      message: 'Are you on the net tonight?',
-    ),
-  ];
+  List<AprsEntry> _entries = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _broker.subscribe(1, 'AprsStoreUpdated', _onAprsStoreUpdated);
+    // Load initial data
+    _loadEntries();
+  }
+
+  void _loadEntries() {
+    final handler =
+        DataBroker.getDataHandlerTyped<AprsHandler>('AprsHandler');
+    if (handler != null) {
+      setState(() {
+        _entries = handler.entries;
+      });
+    }
+  }
+
+  void _onAprsStoreUpdated(int deviceId, String name, Object? data) {
+    _loadEntries();
+  }
 
   @override
   void dispose() {
+    _broker.dispose();
     _destinationController.dispose();
     _messageController.dispose();
     super.dispose();
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')}:'
+        '${time.second.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -235,8 +231,9 @@ class _AprsScreenState extends State<AprsScreen> {
                       DataColumn(label: Text('MESSAGE')),
                     ],
                     rows: _entries.map((entry) {
+                      final typeName = entry.packet.dataType.name;
                       return DataRow(cells: [
-                        DataCell(Text(entry.time)),
+                        DataCell(Text(_formatTime(entry.time))),
                         DataCell(Text(
                           entry.from,
                           style: TextStyle(
@@ -252,20 +249,20 @@ class _AprsScreenState extends State<AprsScreen> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: _typeColor(entry.type).withAlpha(25),
+                              color: _typeColor(typeName).withAlpha(25),
                               borderRadius: BorderRadius.circular(3),
                             ),
                             child: Text(
-                              entry.type,
+                              typeName,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: _typeColor(entry.type),
+                                color: _typeColor(typeName),
                               ),
                             ),
                           ),
                         ),
-                        DataCell(Text(entry.message)),
+                        DataCell(Text(entry.packet.comment)),
                       ]);
                     }).toList(),
                   ),
@@ -280,16 +277,26 @@ class _AprsScreenState extends State<AprsScreen> {
 
   Color _typeColor(String type) {
     switch (type) {
-      case 'Position':
+      case 'position':
+      case 'positionMsg':
+      case 'positionTime':
+      case 'positionTimeMsg':
         return Colors.blue;
-      case 'Status':
+      case 'status':
         return Colors.green;
-      case 'Weather':
+      case 'weatherReport':
         return Colors.orange;
-      case 'Bulletin':
+      case 'beacon':
         return Colors.purple;
-      case 'Message':
+      case 'message':
         return Colors.teal;
+      case 'micE':
+      case 'micECurrent':
+      case 'micEOld':
+        return Colors.indigo;
+      case 'object':
+      case 'item':
+        return Colors.deepOrange;
       default:
         return Colors.grey;
     }
@@ -462,20 +469,4 @@ class _AprsScreenState extends State<AprsScreen> {
       ),
     );
   }
-}
-
-class _AprsEntry {
-  const _AprsEntry({
-    required this.time,
-    required this.from,
-    required this.to,
-    required this.type,
-    required this.message,
-  });
-
-  final String time;
-  final String from;
-  final String to;
-  final String type;
-  final String message;
 }

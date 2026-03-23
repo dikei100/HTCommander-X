@@ -1,5 +1,56 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
+import '../core/data_broker_client.dart';
 import '../widgets/glass_card.dart';
+
+class QsoEntry {
+  String dateTime;
+  String callsign;
+  String frequency;
+  String mode;
+  String band;
+  String rstSent;
+  String rstRcvd;
+  String myCall;
+  String notes;
+
+  QsoEntry({
+    required this.dateTime,
+    required this.callsign,
+    required this.frequency,
+    required this.mode,
+    required this.band,
+    required this.rstSent,
+    required this.rstRcvd,
+    required this.myCall,
+    required this.notes,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'dateTime': dateTime,
+        'callsign': callsign,
+        'frequency': frequency,
+        'mode': mode,
+        'band': band,
+        'rstSent': rstSent,
+        'rstRcvd': rstRcvd,
+        'myCall': myCall,
+        'notes': notes,
+      };
+
+  factory QsoEntry.fromJson(Map<String, dynamic> json) => QsoEntry(
+        dateTime: json['dateTime'] as String? ?? '',
+        callsign: json['callsign'] as String? ?? '',
+        frequency: json['frequency'] as String? ?? '',
+        mode: json['mode'] as String? ?? '',
+        band: json['band'] as String? ?? '',
+        rstSent: json['rstSent'] as String? ?? '',
+        rstRcvd: json['rstRcvd'] as String? ?? '',
+        myCall: json['myCall'] as String? ?? '',
+        notes: json['notes'] as String? ?? '',
+      );
+}
 
 class LogbookScreen extends StatefulWidget {
   const LogbookScreen({super.key});
@@ -9,9 +60,90 @@ class LogbookScreen extends StatefulWidget {
 }
 
 class _LogbookScreenState extends State<LogbookScreen> {
-  // Placeholder data — will be wired to DataBroker later
-  final List<_QsoEntry> _entries = [];
+  final DataBrokerClient _broker = DataBrokerClient();
+  List<QsoEntry> _entries = [];
   int? _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _broker.subscribe(0, 'QsoLog', _onQsoLog);
+    _loadEntries();
+  }
+
+  void _loadEntries() {
+    final raw = DataBroker.getValue<String>(0, 'QsoLog', '');
+    if (raw.isNotEmpty) {
+      try {
+        final list = jsonDecode(raw) as List;
+        setState(() {
+          _entries = list
+              .map((e) => QsoEntry.fromJson(e as Map<String, dynamic>))
+              .toList();
+        });
+      } catch (_) {
+        // Ignore malformed data
+      }
+    }
+  }
+
+  void _onQsoLog(int deviceId, String name, Object? data) {
+    if (data is String) {
+      try {
+        final list = jsonDecode(data) as List;
+        setState(() {
+          _entries = list
+              .map((e) => QsoEntry.fromJson(e as Map<String, dynamic>))
+              .toList();
+        });
+      } catch (_) {
+        // Ignore malformed data
+      }
+    }
+  }
+
+  void _saveEntries() {
+    final json = jsonEncode(_entries.map((e) => e.toJson()).toList());
+    DataBroker.dispatch(0, 'QsoLog', json);
+  }
+
+  void _addEntry() {
+    final now = DateTime.now();
+    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')} '
+        '${now.hour.toString().padLeft(2, '0')}:'
+        '${now.minute.toString().padLeft(2, '0')}';
+    setState(() {
+      _entries.add(QsoEntry(
+        dateTime: dateStr,
+        callsign: '',
+        frequency: '',
+        mode: '',
+        band: '',
+        rstSent: '59',
+        rstRcvd: '59',
+        myCall: '',
+        notes: '',
+      ));
+      _selectedIndex = _entries.length - 1;
+    });
+    _saveEntries();
+  }
+
+  void _removeEntry() {
+    if (_selectedIndex == null || _selectedIndex! >= _entries.length) return;
+    setState(() {
+      _entries.removeAt(_selectedIndex!);
+      _selectedIndex = null;
+    });
+    _saveEntries();
+  }
+
+  @override
+  void dispose() {
+    _broker.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +187,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
             ),
           ),
           const Spacer(),
-          _HeaderButton(label: 'Add', onPressed: () {}),
+          _HeaderButton(label: 'Add', onPressed: _addEntry),
           const SizedBox(width: 6),
           _HeaderButton(
             label: 'Edit',
@@ -64,7 +196,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
           const SizedBox(width: 6),
           _HeaderButton(
             label: 'Remove',
-            onPressed: _selectedIndex != null ? () {} : null,
+            onPressed: _selectedIndex != null ? _removeEntry : null,
           ),
           const SizedBox(width: 6),
           _HeaderButton(label: 'Export ADIF', onPressed: () {}),
@@ -192,30 +324,6 @@ class _LogbookScreenState extends State<LogbookScreen> {
       color: colors.onSurface,
     );
   }
-}
-
-class _QsoEntry {
-  final String dateTime;
-  final String callsign;
-  final String frequency;
-  final String mode;
-  final String band;
-  final String rstSent;
-  final String rstRcvd;
-  final String myCall;
-  final String notes;
-
-  const _QsoEntry({
-    required this.dateTime,
-    required this.callsign,
-    required this.frequency,
-    required this.mode,
-    required this.band,
-    required this.rstSent,
-    required this.rstRcvd,
-    required this.myCall,
-    required this.notes,
-  });
 }
 
 class _HeaderButton extends StatelessWidget {

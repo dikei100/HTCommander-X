@@ -12,6 +12,7 @@ dependencies:
     sdk: flutter
   google_fonts: ^6.0.0
   shared_preferences: ^2.3.0
+  ffi: ^2.1.0
   # Future dependencies (uncomment when integrating):
   # flutter_map: ^7.0.0          # Map widget (Phase 7 integration)
   # latlong2: ^0.9.0             # GPS coordinates
