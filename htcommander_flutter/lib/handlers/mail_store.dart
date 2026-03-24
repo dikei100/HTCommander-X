@@ -24,6 +24,33 @@ class WinlinkMail {
     List<String>? attachments,
   })  : date = date ?? DateTime.now(),
         attachments = attachments ?? [];
+
+  Map<String, dynamic> toJson() => {
+        'mid': mid,
+        'from': from,
+        'to': to,
+        'subject': subject,
+        'body': body,
+        'date': date.toIso8601String(),
+        'folder': folder,
+        'read': read,
+        'attachments': attachments,
+      };
+
+  factory WinlinkMail.fromJson(Map<String, dynamic> json) => WinlinkMail(
+        mid: json['mid'] as String? ?? '',
+        from: json['from'] as String? ?? '',
+        to: json['to'] as String? ?? '',
+        subject: json['subject'] as String? ?? '',
+        body: json['body'] as String? ?? '',
+        date: DateTime.tryParse(json['date'] ?? ''),
+        folder: json['folder'] as String? ?? 'Inbox',
+        read: json['read'] as bool? ?? false,
+        attachments: (json['attachments'] as List?)
+                ?.map((a) => a.toString())
+                .toList() ??
+            [],
+      );
 }
 
 /// In-memory mail store for Winlink mail.

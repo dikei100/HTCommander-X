@@ -24,31 +24,105 @@ class _CommandGroup {
 
 /// GAIA basic commands.
 class _BasicCmd {
+  static const int getDevId = 1;
+  static const int setRegTimes = 2;
+  static const int getRegTimes = 3;
   static const int getDevInfo = 4;
   static const int readStatus = 5;
   static const int registerNotification = 6;
   static const int cancelNotification = 7;
+  static const int getNotification = 8;
   static const int eventNotification = 9;
   static const int readSettings = 10;
   static const int writeSettings = 11;
+  static const int storeSettings = 12;
   static const int readRfCh = 13;
   static const int writeRfCh = 14;
+  static const int getInScan = 15;
+  static const int setInScan = 16;
+  static const int setRemoteDeviceAddr = 17;
+  static const int getTrustedDevice = 18;
+  static const int delTrustedDevice = 19;
   static const int getHtStatus = 20;
+  static const int setHtOnOff = 21;
   static const int getVolume = 22;
   static const int setVolume = 23;
+  static const int radioGetStatus = 24;
+  static const int radioSetMode = 25;
+  static const int radioSeekUp = 26;
+  static const int radioSeekDown = 27;
+  static const int radioSetFreq = 28;
+  static const int readAdvancedSettings = 29;
+  static const int writeAdvancedSettings = 30;
   static const int htSendData = 31;
   static const int setPosition = 32;
   static const int readBssSettings = 33;
   static const int writeBssSettings = 34;
+  static const int freqModeSetPar = 35;
+  static const int freqModeGetStatus = 36;
+  static const int readRda1846sAgc = 37;
+  static const int writeRda1846sAgc = 38;
+  static const int readFreqRange = 39;
+  static const int writeDeEmphCoeffs = 40;
+  static const int stopRinging = 41;
+  static const int setTxTimeLimit = 42;
+  static const int setIsDigitalSignal = 43;
+  static const int setHl = 44;
+  static const int setDid = 45;
+  static const int setIba = 46;
+  static const int getIba = 47;
+  static const int setTrustedDeviceName = 48;
+  static const int setVoc = 49;
+  static const int getVoc = 50;
+  static const int setPhoneStatus = 51;
+  static const int readRfStatus = 52;
+  static const int playTone = 53;
+  static const int getDid = 54;
+  static const int getPf = 55;
+  static const int setPf = 56;
+  static const int rxData = 57;
+  static const int writeRegionCh = 58;
+  static const int writeRegionName = 59;
   static const int setRegion = 60;
+  static const int setPpId = 61;
+  static const int getPpId = 62;
+  static const int readAdvancedSettings2 = 63;
+  static const int writeAdvancedSettings2 = 64;
+  static const int unlock = 65;
+  static const int doProgFunc = 66;
+  static const int setMsg = 67;
+  static const int getMsg = 68;
+  static const int bleConnParam = 69;
+  static const int setTime = 70;
+  static const int setAprsPath = 71;
+  static const int getAprsPath = 72;
+  static const int readRegionName = 73;
+  static const int setDevId = 74;
+  static const int getPfActions = 75;
   static const int getPosition = 76;
+}
+
+/// GAIA extended commands.
+class _ExtendedCmd {
+  static const int getBtSignal = 769;
+  static const int getDevStateVar = 16387;
+  static const int devRegistration = 1825;
 }
 
 /// GAIA notification types.
 class _Notification {
   static const int htStatusChanged = 1;
   static const int dataRxd = 2;
+  static const int newInquiryData = 3;
+  static const int restoreFactorySettings = 4;
+  static const int htChChanged = 5;
   static const int htSettingsChanged = 6;
+  static const int ringingStopped = 7;
+  static const int radioStatusChanged = 8;
+  static const int userAction = 9;
+  static const int systemEvent = 10;
+  static const int bssSettingsChanged = 11;
+  static const int dataTxd = 12;
   static const int positionChange = 13;
 }
 
@@ -366,6 +440,16 @@ class Radio {
         _broker.dispatch(deviceId, 'AllChannelsLoaded', false);
         _sendCommandInt(_CommandGroup.basic, _BasicCmd.registerNotification,
             _Notification.htStatusChanged);
+        _sendCommandInt(_CommandGroup.basic, _BasicCmd.registerNotification,
+            _Notification.dataRxd);
+        _sendCommandInt(_CommandGroup.basic, _BasicCmd.registerNotification,
+            _Notification.htChChanged);
+        _sendCommandInt(_CommandGroup.basic, _BasicCmd.registerNotification,
+            _Notification.htSettingsChanged);
+        _sendCommandInt(_CommandGroup.basic, _BasicCmd.registerNotification,
+            _Notification.bssSettingsChanged);
+        _sendCommandInt(_CommandGroup.basic, _BasicCmd.registerNotification,
+            _Notification.dataTxd);
         if (_gpsEnabled) {
           _sendCommandInt(_CommandGroup.basic, _BasicCmd.registerNotification,
               _Notification.positionChange);
@@ -732,6 +816,131 @@ class Radio {
     final data = Uint8List(2);
     data[1] = powerStatus;
     _sendCommand(_CommandGroup.basic, _BasicCmd.readStatus, body: data);
+  }
+
+  // ── New GAIA Command Methods (Phase 10) ──
+
+  /// Stores the current settings to non-volatile memory.
+  void storeSettings() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.storeSettings);
+  }
+
+  /// Gets the current scan state.
+  void getScanState() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.getInScan);
+  }
+
+  /// Sets the scan state (0=off, 1=on).
+  void setScanState(int scanOn) {
+    _sendCommandByte(_CommandGroup.basic, _BasicCmd.setInScan, scanOn);
+  }
+
+  /// Turns the radio on or off.
+  void setHtOnOff(int onOff) {
+    _sendCommandByte(_CommandGroup.basic, _BasicCmd.setHtOnOff, onOff);
+  }
+
+  /// Reads advanced settings from the radio.
+  void readAdvancedSettings() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.readAdvancedSettings);
+  }
+
+  /// Writes advanced settings to the radio.
+  void writeAdvancedSettings(Uint8List data) {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.writeAdvancedSettings,
+        body: data);
+  }
+
+  /// Reads advanced settings block 2.
+  void readAdvancedSettings2() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.readAdvancedSettings2);
+  }
+
+  /// Writes advanced settings block 2.
+  void writeAdvancedSettings2(Uint8List data) {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.writeAdvancedSettings2,
+        body: data);
+  }
+
+  /// Reads the frequency range information.
+  void readFreqRange() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.readFreqRange);
+  }
+
+  /// Reads AGC settings.
+  void readAgcSettings() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.readRda1846sAgc);
+  }
+
+  /// Writes AGC settings.
+  void writeAgcSettings(Uint8List data) {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.writeRda1846sAgc, body: data);
+  }
+
+  /// Plays a tone on the radio.
+  void playTone(int toneId) {
+    _sendCommandByte(_CommandGroup.basic, _BasicCmd.playTone, toneId);
+  }
+
+  /// Stops ringing.
+  void stopRinging() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.stopRinging);
+  }
+
+  /// Sets the TX time limit.
+  void setTxTimeLimit(int seconds) {
+    _sendCommandByte(_CommandGroup.basic, _BasicCmd.setTxTimeLimit, seconds);
+  }
+
+  /// Reads the RF status.
+  void readRfStatus() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.readRfStatus);
+  }
+
+  /// Sets the APRS digipeater path.
+  void setAprsPath(Uint8List pathData) {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.setAprsPath, body: pathData);
+  }
+
+  /// Gets the current APRS digipeater path.
+  void getAprsPath() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.getAprsPath);
+  }
+
+  /// Reads a region name.
+  void readRegionName(int regionId) {
+    _sendCommandByte(_CommandGroup.basic, _BasicCmd.readRegionName, regionId);
+  }
+
+  /// Gets the programmable function key actions.
+  void getPfActions() {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.getPfActions);
+  }
+
+  /// Sets the BLE connection parameters.
+  void setBleConnParam(Uint8List data) {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.bleConnParam, body: data);
+  }
+
+  /// Sets the radio time.
+  void setTime(Uint8List timeData) {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.setTime, body: timeData);
+  }
+
+  /// Unlocks the radio (if locked).
+  void unlockRadio(Uint8List unlockData) {
+    _sendCommand(_CommandGroup.basic, _BasicCmd.unlock, body: unlockData);
+  }
+
+  /// Gets the Bluetooth signal strength (extended command).
+  void getBtSignal() {
+    _sendCommand(_CommandGroup.extended, _ExtendedCmd.getBtSignal);
+  }
+
+  /// Gets a device state variable (extended command).
+  void getDevStateVar(int varId) {
+    _sendCommandByte(
+        _CommandGroup.extended, _ExtendedCmd.getDevStateVar, varId);
   }
 
   // ── Fragment Accumulation ──────────────────────────────────────────

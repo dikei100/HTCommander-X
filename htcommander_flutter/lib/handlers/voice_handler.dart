@@ -1,19 +1,45 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import '../core/data_broker.dart';
 import '../core/data_broker_client.dart';
 import '../radio/morse_engine.dart';
+import '../radio/sstv/sstv_monitor.dart';
+import '../radio/wav_file_writer.dart';
 
-/// Simplified VoiceHandler stub.
+/// VoiceHandler — processes Chat, Speak, Morse commands, SSTV monitoring,
+/// audio recording, and STT/TTS integration.
 ///
-/// Port of HTCommander.Core/Utils/VoiceHandler.cs (simplified).
-/// Subscribes to Chat, Speak, and Morse commands and processes them.
-/// Full STT/TTS/SSTV/recording functionality will be added later.
+/// Port of HTCommander.Core/Utils/VoiceHandler.cs
 class VoiceHandler {
   final DataBrokerClient _broker = DataBrokerClient();
   bool _disposed = false;
   bool _enabled = false;
   int _targetDeviceId = -1; // -1 means disabled
+
+  /// SSTV monitor instance for decoding SSTV images from audio.
+  SstvMonitor? _sstvMonitor;
+
+  /// Decoded text history for the communication screen.
+  final List<DecodedTextEntry> _decodedTextHistory = [];
+  static const int _maxHistoryEntries = 1000;
+
+  /// Audio recording state.
+  bool _recordingEnabled = false;
+  WavFileWriter? _currentRecording;
+  String? _recordingsPath;
+  String? _appDataPath;
+
+  /// Voice text persistence file.
+  static const String _voiceTextFileName = 'voicetext.json';
+
+  /// STT/TTS settings (stored for future Whisper/espeak integration).
+  String voiceLanguage = 'auto';
+  bool speechToTextEnabled = false;
+
+  List<DecodedTextEntry> get decodedTextHistory =>
+      List.unmodifiable(_decodedTextHistory);
 
   VoiceHandler() {
     // Subscribe to VoiceHandlerEnable/Disable commands on device 1
@@ -25,7 +51,48 @@ class VoiceHandler {
     _broker.subscribe(DataBroker.allDevices, 'Speak', _onSpeak);
     _broker.subscribe(DataBroker.allDevices, 'Morse', _onMorse);
 
+    // Subscribe to audio data for SSTV monitoring
+    _broker.subscribe(
+        DataBroker.allDevices, 'AudioDataAvailable', _onAudioDataAvailable);
+
+    // Subscribe to SSTV send requests
+    _broker.subscribe(1, 'SendSstvImage', _onSendSstvImage);
+
+    // Subscribe to decoded text requests
+    _broker.subscribe(1, 'RequestDecodedTextHistory', _onRequestHistory);
+
+    // Recording control
+    _broker.subscribe(1, 'SetRecordingEnabled', _onSetRecordingEnabled);
+    _broker.subscribe(
+        DataBroker.allDevices, 'AudioDataStart', _onAudioDataStart);
+    _broker.subscribe(
+        DataBroker.allDevices, 'AudioDataEnd', _onAudioDataEnd);
+
+    // Voice language/STT settings
+    _broker.subscribe(0, 'VoiceLanguage', _onVoiceLanguageChanged);
+    _broker.subscribe(0, 'SpeechToTextEnabled', _onSttEnabledChanged);
+
+    // Load persisted settings
+    voiceLanguage = DataBroker.getValue<String>(0, 'VoiceLanguage', 'auto');
+    speechToTextEnabled =
+        DataBroker.getValue<int>(0, 'SpeechToTextEnabled', 0) == 1;
+
     _broker.logInfo('[VoiceHandler] Voice Handler initialized');
+  }
+
+  /// Initializes persistence paths. Call after app data directory is known.
+  void initialize(String appDataPath) {
+    _appDataPath = appDataPath;
+    _recordingsPath = '$appDataPath/Recordings';
+    final dir = Directory(_recordingsPath!);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+
+    // Create SSTV images directory
+    final sstvDir = Directory('$appDataPath/SSTV');
+    if (!sstvDir.existsSync()) sstvDir.createSync(recursive: true);
+
+    // Load voice text history from disk
+    _loadHistory();
   }
 
   /// Handles VoiceHandlerEnable command.
@@ -116,7 +183,9 @@ class VoiceHandler {
           '$callsign: $message');
 
       // Dispatch to DecodedText for display in the Communication tab
-      _broker.dispatch(1, 'DecodedText', '$callsign: $message', store: false);
+      final displayText = '$callsign: $message';
+      _broker.dispatch(1, 'DecodedText', displayText, store: false);
+      _addToHistory(displayText, source: callsign, incoming: false);
     } catch (e) {
       _broker.logError('[VoiceHandler] Error sending chat: $e');
     }
@@ -195,6 +264,220 @@ class VoiceHandler {
   /// Whether the voice handler is currently enabled.
   bool get isEnabled => _enabled;
 
+  // ── SSTV Monitoring ──
+
+  void _onAudioDataAvailable(int deviceId, String name, Object? data) {
+    if (_disposed || !_enabled) return;
+    if (data is! Map) return;
+
+    final pcmData = data['Data'];
+    if (pcmData is! Uint8List) return;
+
+    // Initialize SSTV monitor on first audio
+    _sstvMonitor ??= _createSstvMonitor();
+
+    // Feed audio samples to the SSTV decoder
+    // Convert 16-bit PCM bytes to double samples
+    final sampleCount = pcmData.length ~/ 2;
+    final samples = Float64List(sampleCount);
+    final bd = ByteData.view(pcmData.buffer, pcmData.offsetInBytes);
+    for (var i = 0; i < sampleCount; i++) {
+      samples[i] = bd.getInt16(i * 2, Endian.little) / 32768.0;
+    }
+
+    _sstvMonitor!.processFloatSamples(samples);
+
+    // Write to recording if active
+    final recording = _currentRecording;
+    if (recording != null) {
+      recording.writeSamples(pcmData);
+    }
+  }
+
+  SstvMonitor _createSstvMonitor() {
+    final monitor = SstvMonitor(sampleRate: 32000);
+    monitor.onDecodingStarted = (event) {
+      _broker.logInfo(
+          '[VoiceHandler] SSTV decoding started: ${event.modeName} '
+          '(${event.width}x${event.height})');
+      _broker.dispatch(1, 'SstvDecodingStarted', event, store: false);
+    };
+    monitor.onDecodingProgress = (event) {
+      _broker.dispatch(1, 'SstvDecodingProgress', event, store: false);
+    };
+    monitor.onDecodingComplete = (event) {
+      _broker.logInfo(
+          '[VoiceHandler] SSTV decoding complete: ${event.modeName}');
+      _broker.dispatch(1, 'SstvDecodingComplete', event, store: false);
+      if (event.pixels != null) {
+        _broker.dispatch(1, 'SstvImage', event, store: false);
+      }
+    };
+    return monitor;
+  }
+
+  void _onSendSstvImage(int deviceId, String name, Object? data) {
+    if (_disposed) return;
+    // The actual encoding and transmission is handled by CommunicationScreen
+    // which calls the SstvEncoder directly and dispatches TransmitVoicePCM.
+    // This handler just logs the event.
+    _broker.logInfo('[VoiceHandler] SSTV image send requested');
+  }
+
+  // ── Decoded Text History ──
+
+  void _addToHistory(String text, {String source = '', bool incoming = true}) {
+    final entry = DecodedTextEntry(
+      time: DateTime.now(),
+      text: text,
+      source: source,
+      incoming: incoming,
+    );
+    _decodedTextHistory.add(entry);
+    while (_decodedTextHistory.length > _maxHistoryEntries) {
+      _decodedTextHistory.removeAt(0);
+    }
+    _broker.dispatch(1, 'DecodedTextHistoryUpdated',
+        _decodedTextHistory.length, store: false);
+
+    // Persist every 10 entries
+    if (_decodedTextHistory.length % 10 == 0) {
+      _saveHistory();
+    }
+  }
+
+  void _onRequestHistory(int deviceId, String name, Object? data) {
+    _broker.dispatch(1, 'DecodedTextHistory',
+        List<DecodedTextEntry>.from(_decodedTextHistory), store: false);
+  }
+
+  // ── Audio Recording ──
+
+  void _onSetRecordingEnabled(int deviceId, String name, Object? data) {
+    if (data is bool) {
+      _recordingEnabled = data;
+      _broker.logInfo(
+          '[VoiceHandler] Recording ${_recordingEnabled ? "enabled" : "disabled"}');
+    }
+  }
+
+  void _onAudioDataStart(int deviceId, String name, Object? data) {
+    if (_disposed || !_recordingEnabled) return;
+    if (_recordingsPath == null) return;
+
+    final channelName = data is Map ? (data['ChannelName'] ?? '') as String : '';
+    _startRecording(channelName);
+  }
+
+  void _onAudioDataEnd(int deviceId, String name, Object? data) {
+    if (_disposed) return;
+    _stopRecording();
+  }
+
+  void _startRecording(String channelName) {
+    _stopRecording(); // Close any existing recording
+
+    final now = DateTime.now();
+    final timestamp = '${now.year}'
+        '${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}_'
+        '${now.hour.toString().padLeft(2, '0')}'
+        '${now.minute.toString().padLeft(2, '0')}'
+        '${now.second.toString().padLeft(2, '0')}';
+    final filename = 'recording_$timestamp.wav';
+    final path = '$_recordingsPath/$filename';
+
+    try {
+      _currentRecording = WavFileWriter(path, sampleRate: 32000);
+      _currentRecording!.open();
+      _broker.logInfo('[VoiceHandler] Started recording: $filename');
+    } catch (e) {
+      _broker.logError('[VoiceHandler] Failed to start recording: $e');
+      _currentRecording = null;
+    }
+  }
+
+  void _stopRecording() {
+    final recording = _currentRecording;
+    if (recording == null) return;
+
+    try {
+      recording.close();
+      final duration = recording.durationSeconds;
+      _broker.logInfo(
+          '[VoiceHandler] Stopped recording: ${duration.toStringAsFixed(1)}s');
+
+      // If the recording is too short (<0.5s), delete it
+      if (duration < 0.5) {
+        try {
+          File(recording.path).deleteSync();
+        } catch (_) {}
+      }
+    } catch (e) {
+      _broker.logError('[VoiceHandler] Error stopping recording: $e');
+    }
+
+    _currentRecording = null;
+  }
+
+  // ── Voice Settings ──
+
+  void _onVoiceLanguageChanged(int deviceId, String name, Object? data) {
+    if (data is String) voiceLanguage = data;
+  }
+
+  void _onSttEnabledChanged(int deviceId, String name, Object? data) {
+    if (data is int) speechToTextEnabled = data == 1;
+  }
+
+  // ── History Persistence ──
+
+  void _loadHistory() {
+    final path = _appDataPath;
+    if (path == null) return;
+
+    final file = File('$path/$_voiceTextFileName');
+    if (!file.existsSync()) return;
+
+    try {
+      final json = file.readAsStringSync();
+      final list = jsonDecode(json);
+      if (list is List) {
+        for (final item in list) {
+          if (item is Map<String, dynamic>) {
+            _decodedTextHistory.add(DecodedTextEntry(
+              time: DateTime.tryParse(item['time'] ?? '') ?? DateTime.now(),
+              text: item['text'] ?? '',
+              source: item['source'] ?? '',
+              incoming: item['incoming'] ?? true,
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      _broker.logError('[VoiceHandler] Error loading voice text history: $e');
+    }
+  }
+
+  void _saveHistory() {
+    final path = _appDataPath;
+    if (path == null) return;
+
+    try {
+      final list = _decodedTextHistory
+          .map((e) => {
+                'time': e.time.toIso8601String(),
+                'text': e.text,
+                'source': e.source,
+                'incoming': e.incoming,
+              })
+          .toList();
+      File('$path/$_voiceTextFileName').writeAsStringSync(jsonEncode(list));
+    } catch (e) {
+      _broker.logError('[VoiceHandler] Error saving voice text history: $e');
+    }
+  }
+
   /// Resolves the target device ID for transmission.
   /// Returns null if no valid target is available.
   int? _resolveTransmitDevice(int deviceId) {
@@ -216,7 +499,25 @@ class VoiceHandler {
       _disposed = true;
       _enabled = false;
       _targetDeviceId = -1;
+      _stopRecording();
+      _saveHistory();
+      _sstvMonitor = null;
       _broker.dispose();
     }
   }
+}
+
+/// A decoded text entry for voice/chat/SSTV history.
+class DecodedTextEntry {
+  final DateTime time;
+  final String text;
+  final String source;
+  final bool incoming;
+
+  const DecodedTextEntry({
+    required this.time,
+    required this.text,
+    this.source = '',
+    this.incoming = true,
+  });
 }

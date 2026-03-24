@@ -55,7 +55,7 @@ All servers default to loopback. MCP requires Bearer token when `ServerBindAll` 
 
 ## HTCommander-X Flutter Rewrite (`htcommander_flutter/`)
 
-Full Dart/Flutter rewrite targeting Linux desktop, Windows, and Android. Uses "Signal Protocol" design system (dark base `#0c0e17`, cyan primary `#3cd7ff`, glassmorphism, Inter font). Stitch project "HTCommander-X: New UI" is the design reference. ~103 source files, ~28K LOC, 98 tests.
+Full Dart/Flutter rewrite targeting Linux desktop, Windows, and Android. Uses "Signal Protocol" design system (dark base `#0c0e17`, cyan primary `#3cd7ff`, glassmorphism, Inter font). Stitch project "HTCommander-X: New UI" is the design reference. ~150 source files, ~40K LOC, 180 tests.
 
 ### Prerequisites
 
@@ -65,13 +65,18 @@ Full Dart/Flutter rewrite targeting Linux desktop, Windows, and Android. Uses "S
 
 ```bash
 cd htcommander_flutter
-flutter pub get
-flutter analyze        # must pass with zero issues
-flutter test           # 98 tests
-flutter run -d linux
-flutter build linux --release  # → build/linux/x64/release/bundle/htcommander-x
-flutter build apk
+~/flutter/bin/flutter pub get
+~/flutter/bin/flutter analyze        # must pass with zero errors (warnings OK for unused protocol fields)
+~/flutter/bin/flutter test           # 180 tests
+~/flutter/bin/flutter test test/handlers/  # run a specific test directory
+~/flutter/bin/flutter test test/radio/gps_test.dart  # run a single test file
+~/flutter/bin/flutter analyze lib/handlers/aprs_handler.dart  # analyze a single file
+~/flutter/bin/flutter run -d linux
+~/flutter/bin/flutter build linux --release  # → build/linux/x64/release/bundle/htcommander-x
+~/flutter/bin/flutter build apk
 ```
+
+Note: Flutter SDK is at `~/flutter/bin/flutter` (not on PATH by default).
 
 ### Architecture
 
@@ -81,9 +86,16 @@ flutter build apk
 
 **Key directories**:
 - `core/` — DataBroker pub/sub, DataBrokerClient, SharedPreferences SettingsStore
-- `radio/` — GAIA state machine, SBC codec, SSTV, AX.25, APRS, software modem, morse/DTMF
-- `handlers/` — 14 DataBroker handlers (FrameDeduplicator, PacketStore, AprsHandler, LogStore, MailStore, VoiceHandler, AudioClipHandler, TorrentHandler, BbsHandler, WinlinkClient, YappTransfer + server stubs on mobile)
-- `servers/` — MCP (real on desktop, 16 tools), Web, Rigctld, AGWPE, SMTP, IMAP
+- `radio/` — GAIA state machine (76 basic + 6 extended commands), SBC codec, morse/DTMF
+- `radio/modem/` — Software packet modem: DSP, AFSK 1200, 9600 G3RUH, PSK, HDLC, FX.25 (Reed-Solomon FEC), MultiModem
+- `radio/sstv/` — SSTV encoder/decoder (20+ modes: Robot, Scottie, Martin, Wraase, PD, HF Fax), SstvMonitor, FFT, DSP
+- `radio/ax25/` — AX.25 packet/address/session
+- `radio/aprs/` — APRS packet parser, position, message, weather
+- `radio/gps/` — NMEA 0183 parser (GGA, RMC, GSA, GSV, VTG, GLL, ZDA), GPS data model
+- `handlers/` — 18 DataBroker handlers (FrameDeduplicator, PacketStore, AprsHandler, LogStore, MailStore, VoiceHandler, AudioClipHandler, TorrentHandler, BbsHandler, WinlinkClient, YappTransfer, RepeaterBookClient, ImportUtils, AdifExport, GpsSerialHandler, AirplaneHandler, server stubs on mobile)
+- `handlers/adventurer/` — Text adventure game (Easter egg)
+- `dialogs/` — 31 dialog widgets (APRS, radio config, channel editor, SSTV send, spectrogram, RepeaterBook, mail, etc.)
+- `servers/` — MCP (real on desktop, 16 tools), Web, Rigctld, AGWPE, SMTP, IMAP, CAT Serial (TS-2000)
 - `platform/linux/` — dart:ffi RFCOMM Bluetooth (Isolate), audio I/O (paplay/parecord)
 - `screens/` — 12 screens wired to DataBroker. Communication screen loads current state on init. Screens use 42px inline header bars (not 46px).
 - `widgets/` — VfoDisplay, PttButton, SignalBars, RadioStatusCard, GlassCard, SidebarNav, StatusStrip
@@ -109,6 +121,19 @@ Connection flow: `bluetoothctl connect` (ACL, 3s wait) → `sdptool browse` (SDP
 **RX**: BT audio RFCOMM → 0x7E deframe → SBC decode → PCM → `LinuxAudioOutput` → `paplay` (mono→stereo). **TX**: PTT press → `LinuxMicCapture` → `parecord` (48kHz) → resample to 32kHz → `TransmitVoicePCM` event → `RadioAudioManager` → SBC encode → 0x7E frame → BT audio RFCOMM. PTT release → `CancelVoiceTransmit` event → end frame sent.
 
 **Lifecycle**: `Radio` creates `RadioAudioManager` in constructor, subscribes to `SetAudio` event. Audio auto-starts 3s after radio connects via `_setAudioEnabled(true)`. `LinuxMicCapture`/`LinuxAudioOutput` are instantiated by `CommunicationScreen` on PTT press / `AudioState(true)` respectively.
+
+### Dialog Pattern
+
+Dialogs in `lib/dialogs/` follow Signal Protocol design system. Key conventions:
+- `Dialog` with `surfaceContainerHigh` background, `BorderRadius.circular(8)`
+- 9px uppercase bold headers (`letterSpacing: 1, fontWeight: w700`)
+- 10-11px body text, `outlineVariant` borders, compact `InputDecoration`
+- Return results via `Navigator.pop(context, result)`, null on cancel
+- Stateless for read-only display, StatefulWidget for forms with controllers
+
+### Handler Initialization
+
+Some handlers require `initialize(appDataPath)` after construction for file persistence (PacketStore, VoiceHandler, BbsHandler, TorrentHandler, WinlinkClient). Called from `initializeDataHandlers()` in `main.dart` after app data directory is resolved.
 
 ### Conventions
 
