@@ -181,82 +181,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Column(
       children: [
-        _buildHeader(colors),
-        Expanded(
+        // Tab bar replacing old header + sidebar
+        Container(
+          height: 42,
+          color: colors.surfaceContainer,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                width: 180,
-                child: _buildCategorySidebar(colors),
+              const SizedBox(width: 14),
+              Text(
+                'SYSTEM PARAMETERS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                  color: colors.onSurface,
+                ),
               ),
+              const SizedBox(width: 20),
               Expanded(
-                child: _buildContentPanel(colors),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _categories.map((cat) {
+                      final isSelected = cat.name == _selectedCategory;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: TextButton(
+                          onPressed: () =>
+                              setState(() => _selectedCategory = cat.name),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            minimumSize: Size.zero,
+                            foregroundColor: isSelected
+                                ? colors.primary
+                                : colors.onSurfaceVariant,
+                            backgroundColor: isSelected
+                                ? colors.primaryContainer.withAlpha(40)
+                                : null,
+                            textStyle: TextStyle(
+                              fontSize: 10,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              letterSpacing: 0.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(cat.icon, size: 14),
+                              const SizedBox(width: 6),
+                              Text(cat.name),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
               ),
+              const SizedBox(width: 14),
             ],
           ),
         ),
+        // Content panel — full width (no sidebar)
+        Expanded(
+          child: _buildContentPanel(colors),
+        ),
       ],
-    );
-  }
-
-  Widget _buildHeader(ColorScheme colors) {
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      color: colors.surfaceContainer,
-      child: Row(
-        children: [
-          Text(
-            'SYSTEM PARAMETERS',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-              color: colors.onSurface,
-            ),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategorySidebar(ColorScheme colors) {
-    return Container(
-      color: colors.surfaceContainerLow,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final cat = _categories[index];
-          final isSelected = cat.name == _selectedCategory;
-          return ListTile(
-            dense: true,
-            visualDensity: const VisualDensity(vertical: -2),
-            leading: Icon(
-              cat.icon,
-              size: 16,
-              color:
-                  isSelected ? colors.primary : colors.onSurfaceVariant,
-            ),
-            title: Text(
-              cat.name,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight:
-                    isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected
-                    ? colors.onSurface
-                    : colors.onSurfaceVariant,
-              ),
-            ),
-            selected: isSelected,
-            selectedTileColor: colors.primaryContainer.withAlpha(80),
-            onTap: () => setState(() => _selectedCategory = cat.name),
-          );
-        },
-      ),
     );
   }
 

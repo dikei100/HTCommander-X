@@ -242,33 +242,46 @@ class RadioAudioManager {
     if (transport == null) { _isTransmitting = false; return; }
 
     try {
-      while (_pcmQueue.isNotEmpty && !_voiceTransmitCancel && _running) {
-        final pcmData = _pcmQueue.removeFirst();
+      while (!_voiceTransmitCancel && _running) {
+        while (_pcmQueue.isNotEmpty && !_voiceTransmitCancel && _running) {
+          final pcmData = _pcmQueue.removeFirst();
 
-        // Encode PCM to SBC frames
-        var offset = 0;
-        while (offset + _pcmInputSizePerFrame <= pcmData.length && !_voiceTransmitCancel) {
-          final chunk = pcmData.sublist(offset, offset + _pcmInputSizePerFrame);
-          // Convert bytes to Int16List PCM samples
-          final pcmSamples = Int16List(chunk.length ~/ 2);
-          for (var s = 0; s < pcmSamples.length; s++) {
-            final raw = chunk[s * 2] | (chunk[s * 2 + 1] << 8);
-            pcmSamples[s] = raw > 32767 ? raw - 65536 : raw;
-          }
-          final sbcFrame = _sbcEncoder?.encode(pcmSamples, null, _sbcEncoderFrame);
-          if (sbcFrame != null) {
-            final escaped = _escapeBytes(sbcFrame);
-            await transport.write(escaped);
-          }
-          offset += _pcmInputSizePerFrame;
+          // Encode PCM to SBC frames
+          var offset = 0;
+          while (offset + _pcmInputSizePerFrame <= pcmData.length && !_voiceTransmitCancel) {
+            final chunk = pcmData.sublist(offset, offset + _pcmInputSizePerFrame);
+            // Convert bytes to Int16List PCM samples
+            final pcmSamples = Int16List(chunk.length ~/ 2);
+            for (var s = 0; s < pcmSamples.length; s++) {
+              final raw = chunk[s * 2] | (chunk[s * 2 + 1] << 8);
+              pcmSamples[s] = raw > 32767 ? raw - 65536 : raw;
+            }
+            final sbcFrame = _sbcEncoder?.encode(pcmSamples, null, _sbcEncoderFrame);
+            if (sbcFrame != null) {
+              final escaped = _escapeBytes(sbcFrame);
+              await transport.write(escaped);
+            }
+            offset += _pcmInputSizePerFrame;
 
-          // Real-time pacing: ~100ms per 128 samples at 32kHz
-          await Future.delayed(const Duration(milliseconds: 90));
+            // Real-time pacing: ~100ms per 128 samples at 32kHz
+            await Future.delayed(const Duration(milliseconds: 90));
+          }
+        }
+
+        // Queue empty — wait briefly for more data from mic capture
+        if (!_voiceTransmitCancel && _running) {
+          _newDataAvailable = Completer<void>();
+          try {
+            await _newDataAvailable!.future.timeout(const Duration(milliseconds: 500));
+          } on TimeoutException {
+            break; // No more data within 500ms, end transmission
+          }
+          _newDataAvailable = null;
         }
       }
 
-      // Send end-of-transmission frame
-      if (_running && !_voiceTransmitCancel) {
+      // Always send end-of-transmission frame so the radio exits TX
+      if (_running) {
         await transport.write(_AudioFrame.endFrame);
       }
     } catch (e) {

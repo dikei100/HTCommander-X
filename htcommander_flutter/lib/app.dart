@@ -5,6 +5,8 @@ import 'core/data_broker.dart';
 import 'core/data_broker_client.dart';
 import 'radio/radio.dart' as ht;
 import 'radio/models/radio_dev_info.dart';
+import 'radio/models/radio_settings.dart';
+import 'radio/models/radio_channel_info.dart';
 import 'platform/bluetooth_service.dart';
 import 'platform/linux/linux_platform_services.dart';
 import 'theme/signal_protocol_theme.dart';
@@ -46,8 +48,14 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _selectedIndex = 0;
+  int _selectedSidebarIndex = 0;
   bool _showSettings = false;
+
+  // Sidebar → IndexedStack screen mapping
+  // Sidebar: Communication(0), Contacts(1), Packets(2), Terminal(3),
+  //          BBS(4), Mail(5), Torrent(6), APRS(7)
+  // IndexedStack keeps all 11 screens for backwards compatibility
+  static const _sidebarToScreen = [0, 1, 3, 4, 5, 6, 7, 8];
 
   // DataBroker wiring
   final DataBrokerClient _broker = DataBrokerClient();
@@ -60,31 +68,38 @@ class _AppShellState extends State<AppShell> {
   String _radioState = 'Disconnected';
   String? _radioName;
   int _batteryPercent = 0;
+  int _rssi = 0;
+
+  // VFO frequency for sidebar
+  double _vfoAFreq = 0;
+  String _callSign = 'N0CALL';
+
+  // Cached radio data for VFO info
+  RadioSettings? _settings;
+  List<RadioChannelInfo?> _channels = [];
 
   bool get _isConnected => _radioState == 'connected';
   bool get _isConnecting => _radioState == 'connecting';
 
   static const _screens = <Widget>[
-    CommunicationScreen(),
-    ContactsScreen(),
-    LogbookScreen(),
-    PacketsScreen(),
-    TerminalScreen(),
-    BbsScreen(),
-    MailScreen(),
-    TorrentScreen(),
-    AprsScreen(),
-    MapScreen(),
-    DebugScreen(),
+    CommunicationScreen(), // 0
+    ContactsScreen(),      // 1
+    LogbookScreen(),       // 2 (not in sidebar, accessible elsewhere)
+    PacketsScreen(),       // 3
+    TerminalScreen(),      // 4
+    BbsScreen(),           // 5
+    MailScreen(),          // 6
+    TorrentScreen(),       // 7
+    AprsScreen(),          // 8
+    MapScreen(),           // 9 (not in sidebar)
+    DebugScreen(),         // 10 (not in sidebar)
   ];
 
-  /// Builds the screen area. Uses IndexedStack to keep all screens alive
-  /// so they don't lose DataBroker state when the user switches tabs.
   Widget _buildScreenArea() {
     return Stack(
       children: [
         IndexedStack(
-          index: _selectedIndex,
+          index: _showSettings ? 0 : _sidebarToScreen[_selectedSidebarIndex],
           children: _screens,
         ),
         if (_showSettings) const SettingsScreen(),
@@ -96,21 +111,21 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
 
-    // Load last used MAC from settings
     _radioMac = DataBroker.getValue<String>(0, 'LastRadioMac', '38:D2:00:01:04:E2');
+    _callSign = DataBroker.getValue<String>(0, 'CallSign', 'N0CALL');
 
-    // Detect platform and create services
-    // LinuxPlatformServices will be created once the dart:ffi implementation exists
-    // For now, _platformServices stays null (connection will log an error)
     _initPlatformServices();
 
-    // Subscribe to radio state changes
+    // Radio state subscriptions
     _broker.subscribe(DataBroker.allDevices, 'State', _onRadioStateChanged);
     _broker.subscribe(DataBroker.allDevices, 'Info', _onRadioInfoChanged);
     _broker.subscribe(DataBroker.allDevices, 'BatteryAsPercentage', _onBatteryChanged);
     _broker.subscribe(DataBroker.allDevices, 'FriendlyName', _onFriendlyNameChanged);
+    _broker.subscribe(DataBroker.allDevices, 'HtStatus', _onHtStatusChanged);
+    _broker.subscribe(DataBroker.allDevices, 'Settings', _onSettingsChanged);
+    _broker.subscribe(DataBroker.allDevices, 'Channels', _onChannelsChanged);
 
-    // Subscribe to MCP connect/disconnect events
+    // MCP remote control
     _broker.subscribe(1, 'McpConnectRadio', _onMcpConnect);
     _broker.subscribe(1, 'McpDisconnectRadio', _onMcpDisconnect);
   }
@@ -140,9 +155,7 @@ class _AppShellState extends State<AppShell> {
   void _onRadioInfoChanged(int deviceId, String name, Object? data) {
     if (deviceId < 100) return;
     if (data is RadioDevInfo && mounted) {
-      setState(() {
-        _radioName = 'Radio ${data.productId}';
-      });
+      setState(() => _radioName = 'Radio ${data.productId}');
     } else if (data == null && mounted) {
       setState(() => _radioName = null);
     }
@@ -158,6 +171,42 @@ class _AppShellState extends State<AppShell> {
   void _onFriendlyNameChanged(int deviceId, String name, Object? data) {
     if (deviceId < 100 || data is! String) return;
     if (mounted) setState(() => _radioName = data);
+  }
+
+  void _onHtStatusChanged(int deviceId, String name, Object? data) {
+    if (deviceId < 100) return;
+    if (data != null && mounted) {
+      // Extract RSSI from HtStatus
+      try {
+        final dynamic ht = data;
+        setState(() => _rssi = (ht as dynamic).rssi as int);
+      } catch (_) {}
+    }
+  }
+
+  void _onSettingsChanged(int deviceId, String name, Object? data) {
+    if (deviceId < 100 || data is! RadioSettings || !mounted) return;
+    setState(() {
+      _settings = data;
+      _updateVfoFromChannels();
+    });
+  }
+
+  void _onChannelsChanged(int deviceId, String name, Object? data) {
+    if (deviceId < 100 || data is! List || !mounted) return;
+    setState(() {
+      _channels = data.cast<RadioChannelInfo?>();
+      _updateVfoFromChannels();
+    });
+  }
+
+  void _updateVfoFromChannels() {
+    final s = _settings;
+    if (s == null) return;
+    final chA = s.channelA;
+    if (chA >= 0 && chA < _channels.length && _channels[chA] != null) {
+      _vfoAFreq = _channels[chA]!.rxFreq / 1000000.0;
+    }
   }
 
   // ── MCP remote connect/disconnect ──────────────────────────────
@@ -177,11 +226,10 @@ class _AppShellState extends State<AppShell> {
 
   // ── Radio connection ───────────────────────────────────────────────
 
-  void _onConnectTap() {
+  void _onPowerTap() {
     if (_isConnected || _isConnecting) {
       _disconnectRadio();
     } else if (_radioMac.isNotEmpty) {
-      // Connect directly using the last known MAC
       _connectToRadio(_radioMac);
     } else {
       _showConnectDialog();
@@ -190,16 +238,12 @@ class _AppShellState extends State<AppShell> {
 
   void _connectToRadio(String mac) {
     if (mac.isEmpty) return;
-
-    // Save MAC
     _radioMac = mac;
     DataBroker.dispatch(0, 'LastRadioMac', mac);
 
     if (_platformServices == null) {
-      // No platform implementation yet — show info
       DataBroker.dispatch(1, 'LogInfo',
-          'Bluetooth not yet implemented for this platform. '
-          'Waiting for Linux dart:ffi RFCOMM implementation.',
+          'Bluetooth not yet implemented for this platform.',
           store: false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -210,22 +254,15 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
-    // Create and connect radio
     _radio?.dispose();
     _radio = ht.Radio(_radioDeviceId, mac, _platformServices);
     DataBroker.addDataHandler('Radio_$_radioDeviceId', _radio!);
-
-    // Look up the Bluetooth friendly name asynchronously
     _lookupBluetoothName(mac);
-
-    // Dispatch connected radios list
     DataBroker.dispatch(1, 'ConnectedRadios', [_radio!]);
-
     _radio!.connect();
   }
 
   Future<void> _lookupBluetoothName(String mac) async {
-    // Format MAC with colons for bluetoothctl
     final clean = mac.replaceAll(':', '').replaceAll('-', '').toUpperCase();
     final macColon = List.generate(6, (i) => clean.substring(i * 2, i * 2 + 2)).join(':');
     try {
@@ -235,14 +272,10 @@ class _AppShellState extends State<AppShell> {
         final nameMatch = RegExp(r'Name:\s*(.+)').firstMatch(output);
         if (nameMatch != null) {
           final name = nameMatch.group(1)!.trim();
-          if (name.isNotEmpty) {
-            _radio?.updateFriendlyName(name);
-          }
+          if (name.isNotEmpty) _radio?.updateFriendlyName(name);
         }
       }
-    } catch (_) {
-      // Non-fatal — radio will just show without a friendly name
-    }
+    } catch (_) {}
   }
 
   void _disconnectRadio() {
@@ -256,6 +289,8 @@ class _AppShellState extends State<AppShell> {
       _radioState = 'Disconnected';
       _radioName = null;
       _batteryPercent = 0;
+      _rssi = 0;
+      _vfoAFreq = 0;
     });
   }
 
@@ -300,15 +335,6 @@ class _AppShellState extends State<AppShell> {
                 decoration: InputDecoration(
                   hintText: 'XX:XX:XX:XX:XX:XX',
                   hintStyle: TextStyle(color: colors.outline),
-                  isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide(color: colors.outlineVariant),
-                  ),
-                  filled: true,
-                  fillColor: colors.surfaceContainerLow,
                 ),
               ),
               const SizedBox(height: 12),
@@ -338,9 +364,9 @@ class _AppShellState extends State<AppShell> {
 
   // ── Navigation ─────────────────────────────────────────────────────
 
-  void _onDestinationSelected(int index) {
+  void _onDestinationSelected(int sidebarIndex) {
     setState(() {
-      _selectedIndex = index;
+      _selectedSidebarIndex = sidebarIndex;
       _showSettings = false;
     });
   }
@@ -354,47 +380,44 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.sizeOf(context).width > 800;
-    final colors = Theme.of(context).colorScheme;
 
     if (isWide) {
       return Scaffold(
-        body: Column(
+        body: Row(
           children: [
-            _buildToolbar(colors),
-            Expanded(
-              child: Row(
-                children: [
-                  SidebarNav(
-                    selectedIndex: _showSettings ? -1 : _selectedIndex,
-                    onDestinationSelected: _onDestinationSelected,
-                    onSettingsTap: _onSettingsTap,
-                    onAboutTap: () => _showAboutDialog(context),
-                  ),
-                  const VerticalDivider(width: 1, thickness: 1),
-                  Expanded(child: _buildScreenArea()),
-                ],
-              ),
+            SidebarNav(
+              selectedIndex: _showSettings ? -1 : _selectedSidebarIndex,
+              onDestinationSelected: _onDestinationSelected,
+              onSettingsTap: _onSettingsTap,
+              onPowerTap: _onPowerTap,
+              vfoAFrequency: _vfoAFreq,
+              callSign: _callSign,
+              isConnected: _isConnected,
+              batteryPercent: _batteryPercent,
+              rssi: _rssi,
             ),
+            Expanded(child: _buildScreenArea()),
           ],
         ),
       );
     }
 
+    // Mobile layout
     return Scaffold(
       body: Column(
         children: [
-          _buildToolbar(colors),
+          _buildMobileStatusBar(),
           Expanded(child: _buildScreenArea()),
         ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _showSettings
             ? sidebarDestinations.length
-            : _selectedIndex.clamp(0, 4),
+            : _selectedSidebarIndex.clamp(0, 4),
         onDestinationSelected: (index) {
           if (index < _mobileDestinations.length) {
             setState(() {
-              _selectedIndex = _mobileIndexMap[index];
+              _selectedSidebarIndex = _mobileIndexMap[index];
               _showSettings = false;
             });
           }
@@ -406,118 +429,65 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildToolbar(ColorScheme colors) {
+  Widget _buildMobileStatusBar() {
+    final colors = Theme.of(context).colorScheme;
     return Container(
-      height: 40,
+      height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: colors.outlineVariant, width: 0.5),
-        ),
-      ),
+      color: colors.surfaceContainerLow,
       child: Row(
         children: [
           Text(
             'HTCommander-X',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
               color: colors.primary,
               letterSpacing: 1,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Container(
-            width: 8,
-            height: 8,
+            width: 6,
+            height: 6,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _isConnected
                   ? colors.tertiary
-                  : _isConnecting
-                      ? Colors.amber
-                      : colors.outline,
+                  : _isConnecting ? Colors.amber : colors.outline,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               _isConnected
-                  ? '${_radioName ?? "Radio"} ($_radioMac) ${_batteryPercent > 0 ? "- $_batteryPercent%" : ""}'
-                  : _isConnecting
-                      ? 'Connecting to $_radioMac...'
-                      : 'No Radio Connected',
-              style: TextStyle(
-                fontSize: 11,
-                color: _isConnected ? colors.onSurface : colors.onSurfaceVariant,
-              ),
+                  ? '${_radioName ?? "Radio"} | ${_vfoAFreq > 0 ? "${_vfoAFreq.toStringAsFixed(3)} MHz" : ""}'
+                  : _isConnecting ? 'Connecting...' : 'Disconnected',
+              style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 8),
-          SizedBox(
-            height: 28,
-            child: _isConnecting
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: colors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text('Connecting...', style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant)),
-                    ],
-                  )
-                : _isConnected
-                    ? OutlinedButton.icon(
-                        onPressed: _onConnectTap,
-                        icon: const Icon(Icons.bluetooth_disabled, size: 14),
-                        label: const Text('Disconnect'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          textStyle: const TextStyle(fontSize: 11),
-                          side: BorderSide(color: colors.error.withAlpha(120)),
-                          foregroundColor: colors.error,
-                        ),
-                      )
-                    : FilledButton.icon(
-                        onPressed: _onConnectTap,
-                        icon: const Icon(Icons.bluetooth, size: 14),
-                        label: const Text('Connect Radio'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          textStyle: const TextStyle(fontSize: 11),
-                        ),
-                      ),
+          GestureDetector(
+            onTap: _onPowerTap,
+            child: Icon(
+              _isConnected ? Icons.bluetooth_disabled : Icons.bluetooth,
+              size: 16,
+              color: _isConnected ? colors.error : colors.primary,
+            ),
           ),
         ],
       ),
     );
   }
 
-  static const _mobileIndexMap = [0, 1, 8, 9, 10];
+  // Mobile: show 5 key items in bottom nav
+  static const _mobileIndexMap = [0, 1, 7, 5, 2]; // Comm, Contacts, APRS, Mail, Packets
   static final _mobileDestinations = [
-    sidebarDestinations[0],
-    sidebarDestinations[1],
-    sidebarDestinations[8],
-    sidebarDestinations[9],
-    sidebarDestinations[10],
+    sidebarDestinations[0], // Communication
+    sidebarDestinations[1], // Contacts
+    sidebarDestinations[7], // APRS
+    sidebarDestinations[5], // Mail
+    sidebarDestinations[2], // Packets
   ];
 
-  void _showAboutDialog(BuildContext context) {
-    showAboutDialog(
-      context: context,
-      applicationName: 'HTCommander-X',
-      applicationVersion: '0.3.0',
-      children: [
-        const Text('Flutter edition of HTCommander ham radio controller.'),
-      ],
-    );
-  }
 }

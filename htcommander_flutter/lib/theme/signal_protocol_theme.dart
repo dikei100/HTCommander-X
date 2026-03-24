@@ -4,12 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 class SignalProtocolTheme {
   SignalProtocolTheme._();
 
-  // Dark palette
-  static const _darkSurface = Color(0xFF080A12);
-  static const _darkSurfaceContainerLow = Color(0xFF0E1019);
-  static const _darkSurfaceContainer = Color(0xFF141828);
-  static const _darkSurfaceContainerHigh = Color(0xFF1A2038);
-  static const _darkSurfaceContainerHighest = Color(0xFF222844);
+  // Dark palette — aligned to Stitch "Signal Protocol" design system
+  static const _darkSurface = Color(0xFF0C0E17);
+  static const _darkSurfaceContainerLow = Color(0xFF10131F);
+  static const _darkSurfaceContainer = Color(0xFF151929);
+  static const _darkSurfaceContainerHigh = Color(0xFF191F33);
+  static const _darkSurfaceContainerHighest = Color(0xFF1E243E);
   static const _darkPrimary = Color(0xFF3CD7FF);
   static const _darkOnPrimary = Color(0xFF080A12);
   static const _darkPrimaryContainer = Color(0xFF004E5F);
@@ -93,6 +93,32 @@ class SignalProtocolTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: _darkSurfaceContainerLow,
         indicatorColor: _darkPrimaryContainer,
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: WidgetStatePropertyAll(4),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered)) return _darkPrimary;
+          return _darkSurfaceContainerHigh;
+        }),
+        radius: const Radius.circular(2),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: _darkSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide(color: _darkOutlineVariant.withAlpha(38)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide(color: _darkOutlineVariant.withAlpha(38)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide(color: _darkPrimary),
+        ),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
     );
   }

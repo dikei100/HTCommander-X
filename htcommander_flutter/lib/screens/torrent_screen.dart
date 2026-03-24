@@ -74,7 +74,7 @@ class _TorrentScreenState extends State<TorrentScreen> {
 
   Widget _buildHeader(ColorScheme colors) {
     return Container(
-      height: 46,
+      height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       color: colors.surfaceContainer,
       child: Row(
@@ -82,7 +82,7 @@ class _TorrentScreenState extends State<TorrentScreen> {
           Text(
             'TORRENT FILES',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1,
               color: colors.onSurface,
@@ -93,7 +93,7 @@ class _TorrentScreenState extends State<TorrentScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: _isActive
-                  ? Colors.green.withAlpha(40)
+                  ? colors.tertiary.withAlpha(30)
                   : colors.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(4),
             ),
@@ -104,7 +104,7 @@ class _TorrentScreenState extends State<TorrentScreen> {
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1,
                 color: _isActive
-                    ? Colors.green.shade300
+                    ? colors.tertiary
                     : colors.onSurfaceVariant,
               ),
             ),

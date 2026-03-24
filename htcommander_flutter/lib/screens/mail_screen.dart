@@ -32,35 +32,32 @@ class _MailScreenState extends State<MailScreen> {
     'Draft': Icons.drafts,
     'Sent': Icons.send,
     'Archive': Icons.archive,
-    'Trash': Icons.delete,
+    'Trash': Icons.delete_outline,
   };
 
   @override
   void initState() {
     super.initState();
     _broker.subscribe(1, 'Mails', _onMails);
-    // Load initial data from store
     final store = DataBroker.getDataHandlerTyped<MailStore>('MailStore');
-    if (store != null) {
-      _allMails = store.getAllMails();
-    }
+    if (store != null) _allMails = store.getAllMails();
   }
 
   void _onMails(int deviceId, String name, Object? data) {
     if (data is List<WinlinkMail>) {
       setState(() {
         _allMails = data;
-        // Reset selection if out of bounds
         final filtered = _filteredMails;
-        if (_selectedMailIndex >= filtered.length) {
-          _selectedMailIndex = -1;
-        }
+        if (_selectedMailIndex >= filtered.length) _selectedMailIndex = -1;
       });
     }
   }
 
   List<WinlinkMail> get _filteredMails =>
       _allMails.where((m) => m.folder == _selectedFolder).toList();
+
+  int _folderCount(String folder) =>
+      _allMails.where((m) => m.folder == folder).length;
 
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-'
@@ -83,22 +80,22 @@ class _MailScreenState extends State<MailScreen> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    return Column(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildHeader(colors),
+        // Folder sidebar
+        SizedBox(
+          width: 180,
+          child: _buildFolderSidebar(colors),
+        ),
+        // Mail content area
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Column(
             children: [
-              // Folder sidebar
-              SizedBox(
-                width: 160,
-                child: _buildFolderSidebar(colors),
-              ),
-              // Mail content area
-              Expanded(
-                child: _buildMailContent(colors),
-              ),
+              // Action bar
+              _buildActionBar(colors),
+              // Content
+              Expanded(child: _buildMailContent(colors)),
             ],
           ),
         ),
@@ -106,17 +103,17 @@ class _MailScreenState extends State<MailScreen> {
     );
   }
 
-  Widget _buildHeader(ColorScheme colors) {
+  Widget _buildActionBar(ColorScheme colors) {
     return Container(
-      height: 46,
+      height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       color: colors.surfaceContainer,
       child: Row(
         children: [
           Text(
-            'RADIO MAIL',
+            'FUNK-MAIL',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1,
               color: colors.onSurface,
@@ -143,38 +140,24 @@ class _MailScreenState extends State<MailScreen> {
           FilledButton.icon(
             onPressed: () {},
             icon: const Icon(Icons.edit, size: 14),
-            label: const Text('COMPOSE MESSAGE'),
+            label: const Text('Compose'),
             style: FilledButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               minimumSize: Size.zero,
-              textStyle: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
+              textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
             ),
           ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: _checkForMail,
-            icon: const Icon(Icons.refresh, size: 14),
-            label: const Text('CHECK FOR MAIL'),
+            icon: const Icon(Icons.sync, size: 14),
+            label: const Text('Check Mail'),
             style: OutlinedButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               minimumSize: Size.zero,
-              textStyle: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
+              textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
             ),
           ),
         ],
@@ -189,7 +172,7 @@ class _MailScreenState extends State<MailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Text(
               'FOLDERS',
               style: TextStyle(
@@ -203,36 +186,74 @@ class _MailScreenState extends State<MailScreen> {
           Expanded(
             child: ListView.builder(
               itemCount: _folders.length,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               itemBuilder: (context, index) {
                 final folder = _folders[index];
                 final isSelected = folder == _selectedFolder;
-                return ListTile(
-                  dense: true,
-                  visualDensity: const VisualDensity(vertical: -3),
-                  leading: Icon(
-                    _folderIcons[folder],
-                    size: 16,
-                    color: isSelected
-                        ? colors.primary
-                        : colors.onSurfaceVariant,
-                  ),
-                  title: Text(
-                    folder,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w400,
-                      color: isSelected
-                          ? colors.onSurface
-                          : colors.onSurfaceVariant,
+                final count = _folderCount(folder);
+
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => setState(() {
+                      _selectedFolder = folder;
+                      _selectedMailIndex = -1;
+                    }),
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: isSelected
+                            ? colors.primaryContainer.withAlpha(51)
+                            : Colors.transparent,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _folderIcons[folder],
+                            size: 16,
+                            color: isSelected
+                                ? colors.primary
+                                : colors.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              folder,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                                color: isSelected
+                                    ? colors.onSurface
+                                    : colors.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          if (count > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: colors.primary.withAlpha(25),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: colors.primary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                  selected: isSelected,
-                  selectedTileColor: colors.primaryContainer.withAlpha(80),
-                  onTap: () => setState(() {
-                    _selectedFolder = folder;
-                    _selectedMailIndex = -1;
-                  }),
                 );
               },
             ),
@@ -249,7 +270,7 @@ class _MailScreenState extends State<MailScreen> {
       padding: const EdgeInsets.all(10),
       child: Column(
         children: [
-          // Mail list table
+          // Mail list
           Expanded(
             flex: 3,
             child: GlassCard(
@@ -258,79 +279,112 @@ class _MailScreenState extends State<MailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Text(
-                      'MESSAGES',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                        color: colors.onSurfaceVariant,
-                      ),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          'MESSAGES',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${mails.length} items',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: colors.outline,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SingleChildScrollView(
-                        child: DataTable(
-                          headingRowHeight: 32,
-                          dataRowMinHeight: 28,
-                          dataRowMaxHeight: 32,
-                          columnSpacing: 24,
-                          horizontalMargin: 16,
-                          headingTextStyle: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                            color: colors.onSurfaceVariant,
-                          ),
-                          dataTextStyle: TextStyle(
-                            fontSize: 11,
-                            color: colors.onSurface,
-                          ),
-                          columns: const [
-                            DataColumn(label: Text('FROM')),
-                            DataColumn(label: Text('SUBJECT')),
-                            DataColumn(label: Text('DATE')),
-                          ],
-                          rows: List.generate(mails.length, (index) {
-                            final mail = mails[index];
-                            final isSelected =
-                                index == _selectedMailIndex;
-                            return DataRow(
-                              selected: isSelected,
-                              color: WidgetStateProperty.resolveWith(
-                                  (states) {
-                                if (states
-                                    .contains(WidgetState.selected)) {
-                                  return colors.primaryContainer
-                                      .withAlpha(60);
-                                }
-                                return null;
-                              }),
-                              onSelectChanged: (_) {
-                                setState(
-                                    () => _selectedMailIndex = index);
-                              },
-                              cells: [
-                                DataCell(Text(mail.from)),
-                                DataCell(Text(mail.subject)),
-                                DataCell(Text(_formatDate(mail.date))),
+                    child: mails.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.mail_outline, size: 28,
+                                    color: colors.outline),
+                                const SizedBox(height: 8),
+                                Text('No messages',
+                                    style: TextStyle(
+                                        fontSize: 11, color: colors.outline)),
                               ],
-                            );
-                          }),
-                        ),
-                      ),
-                    ),
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SingleChildScrollView(
+                              child: DataTable(
+                                headingRowHeight: 32,
+                                dataRowMinHeight: 28,
+                                dataRowMaxHeight: 32,
+                                columnSpacing: 24,
+                                horizontalMargin: 16,
+                                headingTextStyle: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1,
+                                  color: colors.onSurfaceVariant,
+                                ),
+                                dataTextStyle: TextStyle(
+                                  fontSize: 11,
+                                  color: colors.onSurface,
+                                ),
+                                columns: const [
+                                  DataColumn(label: Text('CALLSIGN')),
+                                  DataColumn(label: Text('SUBJECT')),
+                                  DataColumn(label: Text('DATE')),
+                                ],
+                                rows: List.generate(mails.length, (index) {
+                                  final mail = mails[index];
+                                  final isSelected =
+                                      index == _selectedMailIndex;
+                                  return DataRow(
+                                    selected: isSelected,
+                                    color: WidgetStateProperty.resolveWith(
+                                        (states) {
+                                      if (states
+                                          .contains(WidgetState.selected)) {
+                                        return colors.primaryContainer
+                                            .withAlpha(60);
+                                      }
+                                      return null;
+                                    }),
+                                    onSelectChanged: (_) {
+                                      setState(
+                                          () => _selectedMailIndex = index);
+                                    },
+                                    cells: [
+                                      DataCell(Text(mail.from,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: colors.primary,
+                                          ))),
+                                      DataCell(Text(mail.subject)),
+                                      DataCell(Text(_formatDate(mail.date),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: colors.onSurfaceVariant,
+                                          ))),
+                                    ],
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 10),
-          // Message preview
+          // Message viewer
           Expanded(
             flex: 2,
             child: GlassCard(
@@ -339,16 +393,51 @@ class _MailScreenState extends State<MailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Text(
-                      'MESSAGE PREVIEW',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                        color: colors.onSurfaceVariant,
-                      ),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          'MESSAGE VIEWER',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.5,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_selectedMailIndex >= 0 &&
+                            _selectedMailIndex < mails.length) ...[
+                          TextButton(
+                            onPressed: () {},
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              textStyle: const TextStyle(fontSize: 10),
+                            ),
+                            child: const Text('Reply'),
+                          ),
+                          TextButton(
+                            onPressed: () {},
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              textStyle: const TextStyle(fontSize: 10),
+                            ),
+                            child: const Text('Forward'),
+                          ),
+                          TextButton(
+                            onPressed: () {},
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              textStyle: const TextStyle(fontSize: 10),
+                              foregroundColor: colors.error,
+                            ),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   Expanded(

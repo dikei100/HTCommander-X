@@ -13,6 +13,7 @@ import 'models/radio_settings.dart';
 import 'models/radio_ht_status.dart';
 import 'models/radio_position.dart';
 import 'models/radio_bss_settings.dart';
+import 'radio_audio_manager.dart';
 import 'models/tnc_data_fragment.dart';
 
 /// GAIA command groups.
@@ -165,6 +166,9 @@ class Radio {
   final List<_FragmentInQueue> _tncQueue = [];
   bool _tncInFlight = false;
 
+  // Audio manager
+  RadioAudioManager? _audioManager;
+
   // Clear channel timer
   Timer? _clearChannelTimer;
 
@@ -196,6 +200,9 @@ class Radio {
     _broker.subscribe(deviceId, 'SetVolumeLevel', _onSetVolumeLevelEvent);
     _broker.subscribe(deviceId, 'SetSquelchLevel', _onSetSquelchLevelEvent);
     _broker.subscribe(deviceId, 'GetVolume', _onGetVolumeEvent);
+
+    // Create audio manager
+    _audioManager = RadioAudioManager(deviceId, macAddress);
   }
 
   // ── Connection Management ──────────────────────────────────────────
@@ -217,6 +224,7 @@ class Radio {
 
   void disconnect([String? msg, RadioState newState = RadioState.disconnected]) {
     if (msg != null) debug(msg);
+    _audioManager?.stop();
     _updateState(newState);
     _transport?.disconnect();
 
@@ -255,6 +263,8 @@ class Radio {
 
   void dispose() {
     disconnect();
+    _audioManager?.dispose();
+    _audioManager = null;
     _broker.dispose();
   }
 
@@ -263,6 +273,13 @@ class Radio {
     _sendCommand(_CommandGroup.basic, _BasicCmd.readSettings);
     _sendCommand(_CommandGroup.basic, _BasicCmd.readBssSettings);
     _requestPowerStatus(_PowerStatus.batteryAsPercentage);
+
+    // Auto-start audio pipeline after connection settles
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_state == RadioState.connected) {
+        _setAudioEnabled(true);
+      }
+    });
   }
 
   void _updateState(RadioState newState) {
@@ -965,7 +982,18 @@ class Radio {
 
   void _onSetAudioEvent(int devId, String name, Object? data) {
     if (devId != deviceId) return;
-    // Audio management will be handled in Phase 5
+    if (data is bool) _setAudioEnabled(data);
+  }
+
+  void _setAudioEnabled(bool enabled) {
+    final ps = _platformServices;
+    if (_audioManager == null || ps == null) return;
+    if (enabled) {
+      final transport = ps.createRadioAudioTransport();
+      _audioManager!.start(transport);
+    } else {
+      _audioManager!.stop();
+    }
   }
 
   void _onSetVolumeLevelEvent(int devId, String name, Object? data) {

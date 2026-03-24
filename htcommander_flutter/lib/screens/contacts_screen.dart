@@ -43,12 +43,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
   final DataBrokerClient _broker = DataBrokerClient();
   List<ContactEntry> _contacts = [];
   int? _selectedIndex;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _broker.subscribe(0, 'Contacts', _onContacts);
     _loadContacts();
+    _searchController.addListener(() {
+      setState(() => _searchQuery = _searchController.text.toLowerCase());
+    });
   }
 
   void _loadContacts() {
@@ -109,8 +114,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
     _saveContacts();
   }
 
+  List<ContactEntry> get _filteredContacts {
+    if (_searchQuery.isEmpty) return _contacts;
+    return _contacts.where((c) {
+      return c.callsign.toLowerCase().contains(_searchQuery) ||
+          c.name.toLowerCase().contains(_searchQuery) ||
+          c.type.toLowerCase().contains(_searchQuery) ||
+          c.description.toLowerCase().contains(_searchQuery);
+    }).toList();
+  }
+
   @override
   void dispose() {
+    _searchController.dispose();
     _broker.dispose();
     super.dispose();
   }
@@ -118,256 +134,479 @@ class _ContactsScreenState extends State<ContactsScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final filtered = _filteredContacts;
+    final activeCount =
+        _contacts.where((c) => c.callsign.isNotEmpty).length;
 
-    return Column(
-      children: [
-        _buildHeader(colors),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left panel: roster list
+          Expanded(
+            flex: 3,
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: _buildContactTable(colors),
+                // Title row with badge and actions
+                Row(
+                  children: [
+                    Text(
+                      'STATION ROSTER',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: colors.primary.withAlpha(30),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '$activeCount ACTIVE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.0,
+                          color: colors.primary,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    _ActionButton(
+                      icon: Icons.add_rounded,
+                      label: 'Add',
+                      onPressed: _addContact,
+                      colors: colors,
+                    ),
+                    const SizedBox(width: 6),
+                    _ActionButton(
+                      icon: Icons.delete_outline_rounded,
+                      label: 'Remove',
+                      onPressed:
+                          _selectedIndex != null ? _removeContact : null,
+                      colors: colors,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                SizedBox(
-                  width: 280,
-                  child: _buildDetailCard(colors),
+                const SizedBox(height: 12),
+                // Search bar
+                GlassCard(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.search_rounded,
+                          size: 16, color: colors.onSurfaceVariant),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.onSurface,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Search callsign, name, type...',
+                            hintStyle: TextStyle(
+                              fontSize: 12,
+                              color: colors.onSurfaceVariant.withAlpha(120),
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                      if (_searchQuery.isNotEmpty)
+                        GestureDetector(
+                          onTap: () => _searchController.clear(),
+                          child: Icon(Icons.close_rounded,
+                              size: 14, color: colors.onSurfaceVariant),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Contact table
+                Expanded(
+                  child: GlassCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        // Table header
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: colors.surfaceContainerHigh.withAlpha(60),
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(8)),
+                          ),
+                          child: Row(
+                            children: [
+                              _tableHeader('CALLSIGN', flex: 2, colors: colors),
+                              _tableHeader('SNR', flex: 1, colors: colors),
+                              _tableHeader('LAST HEARD',
+                                  flex: 2, colors: colors),
+                              _tableHeader('STATUS', flex: 1, colors: colors),
+                            ],
+                          ),
+                        ),
+                        // Table body
+                        Expanded(
+                          child: filtered.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    _searchQuery.isNotEmpty
+                                        ? 'No matching stations'
+                                        : 'No stations in roster',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: colors.outline,
+                                    ),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  itemCount: filtered.length,
+                                  itemBuilder: (context, i) {
+                                    final c = filtered[i];
+                                    final realIndex =
+                                        _contacts.indexOf(c);
+                                    final isSelected =
+                                        _selectedIndex == realIndex;
+                                    final isOnline =
+                                        c.callsign.isNotEmpty;
+
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(
+                                            () => _selectedIndex = realIndex);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14, vertical: 9),
+                                        margin: const EdgeInsets.only(
+                                            top: 1),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? colors.primary.withAlpha(25)
+                                              : Colors.transparent,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            // Callsign
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                c.callsign.isNotEmpty
+                                                    ? c.callsign
+                                                    : '--',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isSelected
+                                                      ? colors.primary
+                                                      : colors.onSurface,
+                                                ),
+                                              ),
+                                            ),
+                                            // SNR (derived from type field)
+                                            Expanded(
+                                              flex: 1,
+                                              child: Text(
+                                                c.type.isNotEmpty
+                                                    ? c.type
+                                                    : '--',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: colors.onSurface,
+                                                ),
+                                              ),
+                                            ),
+                                            // Last heard (derived from description)
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                c.description.isNotEmpty
+                                                    ? c.description
+                                                    : '--',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color:
+                                                      colors.onSurfaceVariant,
+                                                ),
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            // Status badge
+                                            Expanded(
+                                              flex: 1,
+                                              child: Align(
+                                                alignment:
+                                                    Alignment.centerLeft,
+                                                child: _StatusBadge(
+                                                    isOnline: isOnline),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeader(ColorScheme colors) {
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      color: colors.surfaceContainer,
-      child: Row(
-        children: [
-          Text(
-            'STATION ROSTER',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-              color: colors.onSurface,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '${_contacts.length} stations',
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.onSurfaceVariant,
-            ),
-          ),
-          const Spacer(),
-          _HeaderButton(label: 'Add', onPressed: _addContact),
-          const SizedBox(width: 6),
-          _HeaderButton(
-            label: 'Edit',
-            onPressed: _selectedIndex != null ? () {} : null,
-          ),
-          const SizedBox(width: 6),
-          _HeaderButton(
-            label: 'Remove',
-            onPressed: _selectedIndex != null ? _removeContact : null,
+          const SizedBox(width: 14),
+          // Right panel: detail
+          SizedBox(
+            width: 300,
+            child: _buildDetailPanel(colors),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildContactTable(ColorScheme colors) {
-    return GlassCard(
-      padding: const EdgeInsets.all(0),
-      child: _contacts.isEmpty
-          ? Center(
-              child: Text(
-                'No stations in roster',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: colors.outline,
-                ),
-              ),
-            )
-          : SingleChildScrollView(
-              child: SizedBox(
-                width: double.infinity,
-                child: DataTable(
-                  headingRowHeight: 36,
-                  dataRowMinHeight: 32,
-                  dataRowMaxHeight: 32,
-                  columnSpacing: 24,
-                  horizontalMargin: 14,
-                  headingRowColor: WidgetStateProperty.all(
-                    colors.surfaceContainerHigh,
-                  ),
-                  columns: [
-                    DataColumn(
-                      label: Text(
-                        'CALLSIGN',
-                        style: _columnHeaderStyle(colors),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'NAME',
-                        style: _columnHeaderStyle(colors),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'TYPE',
-                        style: _columnHeaderStyle(colors),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'DESCRIPTION',
-                        style: _columnHeaderStyle(colors),
-                      ),
-                    ),
-                  ],
-                  rows: List.generate(_contacts.length, (i) {
-                    final c = _contacts[i];
-                    final selected = _selectedIndex == i;
-                    return DataRow(
-                      selected: selected,
-                      color: selected
-                          ? WidgetStateProperty.all(
-                              colors.primary.withAlpha(30),
-                            )
-                          : null,
-                      onSelectChanged: (_) {
-                        setState(() => _selectedIndex = i);
-                      },
-                      cells: [
-                        DataCell(Text(c.callsign,
-                            style: _cellStyle(colors))),
-                        DataCell(
-                            Text(c.name, style: _cellStyle(colors))),
-                        DataCell(
-                            Text(c.type, style: _cellStyle(colors))),
-                        DataCell(Text(c.description,
-                            style: _cellStyle(colors))),
-                      ],
-                    );
-                  }),
-                ),
-              ),
-            ),
+  Widget _tableHeader(String label,
+      {required int flex, required ColorScheme colors}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: colors.onSurfaceVariant,
+        ),
+      ),
     );
   }
 
-  Widget _buildDetailCard(ColorScheme colors) {
+  Widget _buildDetailPanel(ColorScheme colors) {
     final contact =
         _selectedIndex != null && _selectedIndex! < _contacts.length
             ? _contacts[_selectedIndex!]
             : null;
 
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'STATION DETAIL',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: colors.onSurfaceVariant,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (contact == null)
-            Expanded(
-              child: Center(
-                child: Text(
+    if (contact == null) {
+      return GlassCard(
+        child: SizedBox(
+          height: double.infinity,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.person_outline_rounded,
+                    size: 32, color: colors.outline.withAlpha(80)),
+                const SizedBox(height: 8),
+                Text(
                   'Select a station',
                   style: TextStyle(
                     fontSize: 11,
                     color: colors.outline,
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: SizedBox(
+        height: double.infinity,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Contact header
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: colors.primary.withAlpha(25),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        contact.callsign.isNotEmpty
+                            ? contact.callsign[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: colors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          contact.callsign.isNotEmpty
+                              ? contact.callsign
+                              : 'No Callsign',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        if (contact.name.isNotEmpty)
+                          Text(
+                            contact.name,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  _StatusBadge(isOnline: contact.callsign.isNotEmpty),
+                ],
               ),
-            )
-          else
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _DetailField(
-                        label: 'CALLSIGN', value: contact.callsign),
-                    const SizedBox(height: 12),
-                    _DetailField(label: 'NAME', value: contact.name),
-                    const SizedBox(height: 12),
-                    _DetailField(label: 'TYPE', value: contact.type),
-                    const SizedBox(height: 12),
-                    _DetailField(
-                        label: 'DESCRIPTION',
-                        value: contact.description),
-                  ],
+              const SizedBox(height: 20),
+
+              // Hardware Signature section
+              _sectionHeader('HARDWARE SIGNATURE', colors),
+              const SizedBox(height: 10),
+              _detailRow('Node Type', contact.type.isNotEmpty ? contact.type : '--', colors),
+              const SizedBox(height: 6),
+              _detailRow('Firmware', '--', colors),
+              const SizedBox(height: 6),
+              _detailRow('Antenna', '--', colors),
+              const SizedBox(height: 6),
+              _detailRow('Power Source', '--', colors),
+              const SizedBox(height: 20),
+
+              // Frequency Profile section
+              _sectionHeader('FREQUENCY PROFILE', colors),
+              const SizedBox(height: 10),
+              if (contact.description.isNotEmpty)
+                Text(
+                  contact.description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colors.onSurface,
+                    height: 1.5,
+                  ),
+                )
+              else
+                Text(
+                  'No frequencies logged',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.outline,
+                  ),
+                ),
+              const SizedBox(height: 20),
+
+              // Transmission History section
+              _sectionHeader('TRANSMISSION HISTORY', colors),
+              const SizedBox(height: 10),
+              Text(
+                'No transmissions recorded',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colors.outline,
                 ),
               ),
-            ),
-        ],
+              const SizedBox(height: 20),
+
+              // Clear Log button
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () {
+                    // Clear description as log placeholder
+                    if (_selectedIndex != null &&
+                        _selectedIndex! < _contacts.length) {
+                      setState(() {
+                        _contacts[_selectedIndex!].description = '';
+                      });
+                      _saveContacts();
+                    }
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: colors.error,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      side: BorderSide(
+                        color: colors.error.withAlpha(60),
+                      ),
+                    ),
+                  ),
+                  child: const Text(
+                    'Clear Log',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  TextStyle _columnHeaderStyle(ColorScheme colors) {
-    return TextStyle(
-      fontSize: 9,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 1.5,
-      color: colors.onSurfaceVariant,
+  Widget _sectionHeader(String label, ColorScheme colors) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 9,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1.5,
+        color: colors.onSurfaceVariant,
+      ),
     );
   }
 
-  TextStyle _cellStyle(ColorScheme colors) {
-    return TextStyle(
-      fontSize: 12,
-      color: colors.onSurface,
-    );
-  }
-}
-
-class _DetailField extends StatelessWidget {
-  const _DetailField({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _detailRow(String label, String value, ColorScheme colors) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
           style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
+            fontSize: 11,
             color: colors.onSurfaceVariant,
-            letterSpacing: 1,
           ),
         ),
-        const SizedBox(height: 2),
         Text(
           value,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 11,
             fontWeight: FontWeight.w500,
             color: colors.onSurface,
           ),
@@ -377,21 +616,71 @@ class _DetailField extends StatelessWidget {
   }
 }
 
-class _HeaderButton extends StatelessWidget {
-  const _HeaderButton({required this.label, this.onPressed});
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.isOnline});
+  final bool isOnline;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = isOnline ? 'Online' : 'Offline';
+    final bgColor = isOnline
+        ? const Color(0xFFB5FFC2).withAlpha(30)
+        : const Color(0xFFEE7D77).withAlpha(30);
+    final textColor =
+        isOnline ? const Color(0xFFB5FFC2) : const Color(0xFFEE7D77);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.colors,
+    this.onPressed,
+  });
+  final IconData icon;
   final String label;
+  final ColorScheme colors;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
+    final enabled = onPressed != null;
+    return TextButton.icon(
       onPressed: onPressed,
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        minimumSize: Size.zero,
-        textStyle: const TextStyle(fontSize: 11),
+      icon: Icon(icon,
+          size: 14,
+          color: enabled ? colors.primary : colors.onSurfaceVariant.withAlpha(80)),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: enabled ? colors.primary : colors.onSurfaceVariant.withAlpha(80),
+        ),
       ),
-      child: Text(label),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        minimumSize: Size.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+        ),
+      ),
     );
   }
 }

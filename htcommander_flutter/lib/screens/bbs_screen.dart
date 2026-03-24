@@ -80,7 +80,82 @@ class _BbsScreenState extends State<BbsScreen> {
 
     return Column(
       children: [
-        _buildHeader(colors),
+        // Inline header bar
+        Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          color: colors.surfaceContainer,
+          child: Row(
+            children: [
+              Text(
+                'BBS BOARD',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                  color: colors.onSurface,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _isActive
+                      ? colors.tertiary.withAlpha(30)
+                      : colors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  _isActive ? 'ACTIVE' : 'INACTIVE',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                    color: _isActive
+                        ? colors.tertiary
+                        : colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                height: 28,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: Checkbox(
+                        value: _viewTraffic,
+                        onChanged: (v) =>
+                            setState(() => _viewTraffic = v ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'View Traffic',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              TextButton(
+                onPressed: _isActive ? _deactivate : _activate,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: Size.zero,
+                  textStyle: const TextStyle(fontSize: 10),
+                ),
+                child: Text(_isActive ? 'Deactivate' : 'Activate'),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -101,81 +176,6 @@ class _BbsScreenState extends State<BbsScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildHeader(ColorScheme colors) {
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      color: colors.surfaceContainer,
-      child: Row(
-        children: [
-          Text(
-            'BBS BOARD',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-              color: colors.onSurface,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: _isActive
-                  ? Colors.green.withAlpha(40)
-                  : colors.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              _isActive ? 'ACTIVE' : 'INACTIVE',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1,
-                color: _isActive
-                    ? Colors.green.shade300
-                    : colors.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const Spacer(),
-          // View Traffic checkbox
-          SizedBox(
-            height: 30,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: Checkbox(
-                    value: _viewTraffic,
-                    onChanged: (v) =>
-                        setState(() => _viewTraffic = v ?? false),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'View Traffic',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colors.onSurface,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          _HeaderButton(
-            label: _isActive ? 'Deactivate' : 'Activate',
-            onPressed: _isActive ? _deactivate : _activate,
-          ),
-        ],
-      ),
     );
   }
 
@@ -338,21 +338,3 @@ class _BbsScreenState extends State<BbsScreen> {
   }
 }
 
-class _HeaderButton extends StatelessWidget {
-  const _HeaderButton({required this.label, this.onPressed});
-  final String label;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        minimumSize: Size.zero,
-        textStyle: const TextStyle(fontSize: 11),
-      ),
-      child: Text(label),
-    );
-  }
-}

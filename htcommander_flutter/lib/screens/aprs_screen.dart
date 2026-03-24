@@ -3,6 +3,7 @@ import '../core/data_broker.dart';
 import '../core/data_broker_client.dart';
 import '../handlers/aprs_handler.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/status_strip.dart';
 
 class AprsScreen extends StatefulWidget {
   const AprsScreen({super.key});
@@ -64,215 +65,23 @@ class _AprsScreenState extends State<AprsScreen> {
         '${time.second.toString().padLeft(2, '0')}';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Column(
-      children: [
-        _buildHeader(colors),
-        if (_showWarning) _buildWarningBanner(colors),
-        Expanded(
-          child: _buildDataTable(colors),
-        ),
-        _buildTransmitBar(colors),
-      ],
-    );
+  String _formatPosition(AprsEntry entry) {
+    final lat = entry.packet.position.coordinateSet.latitude.value;
+    final lon = entry.packet.position.coordinateSet.longitude.value;
+    if (lat == 0 && lon == 0) return '--';
+    final latDir = lat >= 0 ? 'N' : 'S';
+    final lonDir = lon >= 0 ? 'E' : 'W';
+    return '${lat.abs().toStringAsFixed(4)}$latDir '
+        '${lon.abs().toStringAsFixed(4)}$lonDir';
   }
 
-  Widget _buildHeader(ColorScheme colors) {
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      color: colors.surfaceContainer,
-      child: Row(
-        children: [
-          Text(
-            'APRS DASHBOARD',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-              color: colors.onSurface,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              'N0CALL',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const Spacer(),
-          SizedBox(
-            height: 28,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Checkbox(
-                  value: _showAll,
-                  onChanged: (v) => setState(() => _showAll = v ?? false),
-                  visualDensity: const VisualDensity(
-                    horizontal: -4,
-                    vertical: -4,
-                  ),
-                ),
-                Text(
-                  'SHOW ALL',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1,
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Text(
-            '${_entries.length} MESSAGES',
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1,
-              color: colors.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWarningBanner(ColorScheme colors) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      color: Colors.amber.withAlpha(25),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_rounded, size: 16, color: Colors.amber[700]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'No APRS channel configured. Set an APRS channel in Settings to enable packet reception.',
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.amber[700],
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 14),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-            onPressed: () => setState(() => _showWarning = false),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDataTable(ColorScheme colors) {
-    return Padding(
-      padding: const EdgeInsets.all(10),
-      child: GlassCard(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Text(
-                'PACKET LOG',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SingleChildScrollView(
-                  child: DataTable(
-                    headingRowHeight: 32,
-                    dataRowMinHeight: 28,
-                    dataRowMaxHeight: 32,
-                    columnSpacing: 24,
-                    horizontalMargin: 16,
-                    headingTextStyle: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
-                      color: colors.onSurfaceVariant,
-                    ),
-                    dataTextStyle: TextStyle(
-                      fontSize: 11,
-                      color: colors.onSurface,
-                    ),
-                    columns: const [
-                      DataColumn(label: Text('TIME')),
-                      DataColumn(label: Text('FROM')),
-                      DataColumn(label: Text('TO')),
-                      DataColumn(label: Text('TYPE')),
-                      DataColumn(label: Text('MESSAGE')),
-                    ],
-                    rows: _entries.map((entry) {
-                      final typeName = entry.packet.dataType.name;
-                      return DataRow(cells: [
-                        DataCell(Text(_formatTime(entry.time))),
-                        DataCell(Text(
-                          entry.from,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: colors.primary,
-                          ),
-                        )),
-                        DataCell(Text(entry.to)),
-                        DataCell(
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _typeColor(typeName).withAlpha(25),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: Text(
-                              typeName,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: _typeColor(typeName),
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(Text(entry.packet.comment)),
-                      ]);
-                    }).toList(),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  /// Count unique callsigns (stations) from entries.
+  int get _activeStations {
+    final seen = <String>{};
+    for (final e in _entries) {
+      seen.add(e.from);
+    }
+    return seen.length;
   }
 
   Color _typeColor(String type) {
@@ -302,10 +111,496 @@ class _AprsScreenState extends State<AprsScreen> {
     }
   }
 
-  Widget _buildTransmitBar(ColorScheme colors) {
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    const sectionStyle = TextStyle(
+      fontSize: 9,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 1.5,
+    );
+
+    return Column(
+      children: [
+        if (_showWarning) _buildWarningBanner(colors),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- Left column (flex 3) ---
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    children: [
+                      // Frequency monitor panel
+                      _buildFrequencyPanel(colors, sectionStyle),
+                      const SizedBox(height: 10),
+                      // Live APRS Feed
+                      Expanded(
+                        child: _buildFeedPanel(colors, sectionStyle),
+                      ),
+                      const SizedBox(height: 10),
+                      // Transmit bar
+                      _buildTransmitBar(colors),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // --- Right column (flex 2): Map placeholder ---
+                Expanded(
+                  flex: 2,
+                  child: _buildMapPlaceholder(colors, sectionStyle),
+                ),
+              ],
+            ),
+          ),
+        ),
+        StatusStrip(
+          isConnected: _entries.isNotEmpty,
+          encoding: 'AX.25 / APRS',
+          extraItems: [
+            StatusStripItem(text: '$_activeStations STATIONS'),
+            StatusStripItem(text: '${_entries.length} PACKETS'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Frequency monitor panel
+  // ---------------------------------------------------------------------------
+  Widget _buildFrequencyPanel(ColorScheme colors, TextStyle sectionStyle) {
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'FREQUENCY MONITOR',
+            style: sectionStyle.copyWith(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Large frequency display
+              Text(
+                '144.800',
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w300,
+                  letterSpacing: 2,
+                  color: colors.primary,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'MHz',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: colors.primary.withAlpha(180),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Text(
+                  'Wide-FM / APRS Standard',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              // PTT Active indicator
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colors.error.withAlpha(30),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: colors.error,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'PTT ACTIVE',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                        color: colors.error,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Signal metrics row
+          Row(
+            children: [
+              _buildMetric(colors, 'SIGNAL', '-92 dBm'),
+              const SizedBox(width: 24),
+              _buildMetric(colors, 'SNR', '12.4 dB'),
+              const SizedBox(width: 24),
+              _buildMetric(colors, 'BANDWIDTH', '12.5 kHz'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetric(ColorScheme colors, String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+            color: colors.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: colors.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Live APRS Feed panel
+  // ---------------------------------------------------------------------------
+  Widget _buildFeedPanel(ColorScheme colors, TextStyle sectionStyle) {
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                Text(
+                  'LIVE APRS FEED',
+                  style:
+                      sectionStyle.copyWith(color: colors.onSurfaceVariant),
+                ),
+                const Spacer(),
+                SizedBox(
+                  height: 22,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: Checkbox(
+                          value: _showAll,
+                          onChanged: (v) =>
+                              setState(() => _showAll = v ?? false),
+                          visualDensity: const VisualDensity(
+                            horizontal: -4,
+                            vertical: -4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'SHOW ALL',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withAlpha(25),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '$_activeStations STATIONS ACTIVE',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1,
+                      color: colors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Divider
+          Divider(
+            height: 1,
+            thickness: 0.5,
+            color: colors.outlineVariant.withAlpha(38),
+          ),
+          // Table
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                child: DataTable(
+                  headingRowHeight: 32,
+                  dataRowMinHeight: 28,
+                  dataRowMaxHeight: 32,
+                  columnSpacing: 24,
+                  horizontalMargin: 16,
+                  headingTextStyle: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  dataTextStyle: TextStyle(
+                    fontSize: 11,
+                    color: colors.onSurface,
+                  ),
+                  columns: const [
+                    DataColumn(label: Text('CALLSIGN')),
+                    DataColumn(label: Text('SSID')),
+                    DataColumn(label: Text('POSITION')),
+                    DataColumn(label: Text('DISTANCE')),
+                    DataColumn(label: Text('LAST HEARD')),
+                  ],
+                  rows: _entries.map((entry) {
+                    // Split callsign and SSID
+                    final parts = entry.from.split('-');
+                    final callsign = parts.isNotEmpty ? parts[0] : entry.from;
+                    final ssid = parts.length > 1 ? '-${parts[1]}' : '';
+
+                    final typeColor =
+                        _typeColor(entry.packet.dataType.name);
+
+                    return DataRow(cells: [
+                      DataCell(Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: typeColor,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            callsign,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: colors.primary,
+                            ),
+                          ),
+                        ],
+                      )),
+                      DataCell(Text(
+                        ssid,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      )),
+                      DataCell(Text(
+                        _formatPosition(entry),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        ),
+                      )),
+                      DataCell(Text(
+                        '--',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      )),
+                      DataCell(Text(_formatTime(entry.time))),
+                    ]);
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Map placeholder (right column)
+  // ---------------------------------------------------------------------------
+  Widget _buildMapPlaceholder(ColorScheme colors, TextStyle sectionStyle) {
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: SizedBox.expand(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'STATION MAP',
+                  style:
+                      sectionStyle.copyWith(color: colors.onSurfaceVariant),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.map_outlined,
+                      size: 64,
+                      color: colors.onSurfaceVariant.withAlpha(60),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'APRS MAP',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 2,
+                        color: colors.onSurfaceVariant.withAlpha(80),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Station positions will appear here',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: colors.onSurfaceVariant.withAlpha(50),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Station counter badge at bottom
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: colors.primary.withAlpha(12),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.cell_tower, size: 14, color: colors.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$_activeStations STATIONS TRACKED',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1,
+                      color: colors.primary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_entries.length} PACKETS',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Warning banner
+  // ---------------------------------------------------------------------------
+  Widget _buildWarningBanner(ColorScheme colors) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      color: colors.surfaceContainerLow,
+      color: Colors.amber.withAlpha(25),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 16, color: Colors.amber[700]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'No APRS channel configured. Set an APRS channel in Settings to enable packet reception.',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.amber[700],
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 14),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            onPressed: () => setState(() => _showWarning = false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Transmit bar
+  // ---------------------------------------------------------------------------
+  Widget _buildTransmitBar(ColorScheme colors) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(
         children: [
           // Route dropdown

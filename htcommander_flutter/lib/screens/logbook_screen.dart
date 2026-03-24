@@ -164,7 +164,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
 
   Widget _buildHeader(ColorScheme colors) {
     return Container(
-      height: 46,
+      height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       color: colors.surfaceContainer,
       child: Row(
@@ -172,7 +172,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
           Text(
             'QSO LOGBOOK',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1,
               color: colors.onSurface,
@@ -182,7 +182,7 @@ class _LogbookScreenState extends State<LogbookScreen> {
           Text(
             '${_entries.length} entries',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 10,
               color: colors.onSurfaceVariant,
             ),
           ),

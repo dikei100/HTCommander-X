@@ -55,7 +55,7 @@ All servers default to loopback. MCP requires Bearer token when `ServerBindAll` 
 
 ## HTCommander-X Flutter Rewrite (`htcommander_flutter/`)
 
-Full Dart/Flutter rewrite targeting Linux desktop, Windows, and Android. Uses "Signal Protocol" design system (dark base `#080a12`, cyan primary `#3cd7ff`, glassmorphism, Inter font). ~102 source files, ~26K LOC, 98 tests.
+Full Dart/Flutter rewrite targeting Linux desktop, Windows, and Android. Uses "Signal Protocol" design system (dark base `#0c0e17`, cyan primary `#3cd7ff`, glassmorphism, Inter font). Stitch project "HTCommander-X: New UI" is the design reference. ~103 source files, ~28K LOC, 98 tests.
 
 ### Prerequisites
 
@@ -77,7 +77,7 @@ flutter build apk
 
 **Startup**: `WidgetsFlutterBinding.ensureInitialized()` → `SharedPrefsSettingsStore.create()` → `DataBroker.initialize(store)` → `initializeDataHandlers()` → `runApp()`.
 
-**App shell** (`app.dart`): Holds `Radio?` and `PlatformServices?`. Connect button uses last saved MAC directly (dialog only when no MAC saved). Looks up BT friendly name via `bluetoothctl info`. Screens in `IndexedStack` (preserves state across tab switches). MCP `McpConnectRadio`/`McpDisconnectRadio` events wired for remote control.
+**App shell** (`app.dart`): Holds `Radio?` and `PlatformServices?`. No top toolbar — sidebar contains branding, frequency display, callsign, and connect/disconnect. Screens in `IndexedStack` (preserves state across tab switches). Sidebar has 8 nav items (Communication, Contacts, Packets, Terminal, BBS, Mail, Torrent, APRS); Logbook/Map/Debug remain in IndexedStack but not in sidebar nav. `_sidebarToScreen` maps sidebar indices to screen indices. MCP `McpConnectRadio`/`McpDisconnectRadio` events wired for remote control.
 
 **Key directories**:
 - `core/` — DataBroker pub/sub, DataBrokerClient, SharedPreferences SettingsStore
@@ -85,8 +85,8 @@ flutter build apk
 - `handlers/` — 14 DataBroker handlers (FrameDeduplicator, PacketStore, AprsHandler, LogStore, MailStore, VoiceHandler, AudioClipHandler, TorrentHandler, BbsHandler, WinlinkClient, YappTransfer + server stubs on mobile)
 - `servers/` — MCP (real on desktop, 16 tools), Web, Rigctld, AGWPE, SMTP, IMAP
 - `platform/linux/` — dart:ffi RFCOMM Bluetooth (Isolate), audio I/O (paplay/parecord)
-- `screens/` — 12 screens wired to DataBroker. Communication screen loads current state on init.
-- `widgets/` — VfoDisplay, PttButton, SignalBars, RadioStatusCard, GlassCard, SidebarNav
+- `screens/` — 12 screens wired to DataBroker. Communication screen loads current state on init. Screens use 42px inline header bars (not 46px).
+- `widgets/` — VfoDisplay, PttButton, SignalBars, RadioStatusCard, GlassCard, SidebarNav, StatusStrip
 
 ### DataBroker Pattern (Same as C#)
 
@@ -104,9 +104,11 @@ Connection flow: `bluetoothctl connect` (ACL, 3s wait) → `sdptool browse` (SDP
 
 **Connection loss**: When `Radio._onReceivedData` gets error+null, calls `disconnect()` to transition state. Read loop logs exit reason before exiting.
 
-### Audio Pipeline
+### Audio Pipeline (Fully Wired)
 
-**RX**: BT audio RFCOMM → 0x7E deframe → SBC decode → PCM → `paplay` (mono→stereo). **TX**: `parecord` (48kHz) → resample to 32kHz → SBC encode → 0x7E frame → BT audio RFCOMM.
+**RX**: BT audio RFCOMM → 0x7E deframe → SBC decode → PCM → `LinuxAudioOutput` → `paplay` (mono→stereo). **TX**: PTT press → `LinuxMicCapture` → `parecord` (48kHz) → resample to 32kHz → `TransmitVoicePCM` event → `RadioAudioManager` → SBC encode → 0x7E frame → BT audio RFCOMM. PTT release → `CancelVoiceTransmit` event → end frame sent.
+
+**Lifecycle**: `Radio` creates `RadioAudioManager` in constructor, subscribes to `SetAudio` event. Audio auto-starts 3s after radio connects via `_setAudioEnabled(true)`. `LinuxMicCapture`/`LinuxAudioOutput` are instantiated by `CommunicationScreen` on PTT press / `AudioState(true)` respectively.
 
 ### Conventions
 

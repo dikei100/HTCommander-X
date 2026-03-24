@@ -8,6 +8,7 @@ class VfoDisplay extends StatelessWidget {
     required this.label,
     required this.frequency,
     this.channelName,
+    this.modulation,
     this.isActive = false,
     this.isPrimary = true,
   });
@@ -15,6 +16,7 @@ class VfoDisplay extends StatelessWidget {
   final String label;
   final double frequency; // in MHz
   final String? channelName;
+  final String? modulation;
   final bool isActive;
   final bool isPrimary;
 
@@ -75,16 +77,38 @@ class VfoDisplay extends StatelessWidget {
               color: accentColor,
               letterSpacing: 1,
               height: 1.1,
+              shadows: [
+                Shadow(
+                  color: accentColor.withAlpha(40),
+                  blurRadius: 12,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            'MHz',
-            style: TextStyle(
-              fontSize: 10,
-              color: colors.onSurfaceVariant,
-              letterSpacing: 1,
-            ),
+          Row(
+            children: [
+              Text(
+                'MHz',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: colors.onSurfaceVariant,
+                  letterSpacing: 1,
+                ),
+              ),
+              if (modulation != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  modulation!,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    color: colors.onSurfaceVariant,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import '../core/data_broker_client.dart';
 import '../handlers/packet_store.dart';
 import '../radio/ax25/ax25_packet.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/status_strip.dart';
 
 class PacketsScreen extends StatefulWidget {
   const PacketsScreen({super.key});
@@ -21,16 +22,13 @@ class _PacketsScreenState extends State<PacketsScreen> {
   void initState() {
     super.initState();
     _broker.subscribe(1, 'PacketStoreUpdated', _onPacketStoreUpdated);
-    // Load initial data
     _loadPackets();
   }
 
   void _loadPackets() {
     final store = DataBroker.getDataHandlerTyped<PacketStore>('PacketStore');
     if (store != null) {
-      setState(() {
-        _packets = store.packets;
-      });
+      setState(() => _packets = store.packets);
     }
   }
 
@@ -77,22 +75,86 @@ class _PacketsScreenState extends State<PacketsScreen> {
 
     return Column(
       children: [
-        _buildHeader(colors),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(14),
-            child: Column(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Left: AX.25 Packet Stream
                 Expanded(
                   flex: 3,
-                  child: _buildPacketTable(colors),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildStreamHeader(colors),
+                      const SizedBox(height: 10),
+                      Expanded(child: _buildPacketTable(colors)),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  height: 180,
-                  child: _buildDecodePanel(colors),
+                const SizedBox(width: 14),
+                // Right: Packet Decode
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'PACKET DECODE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurfaceVariant,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Expanded(child: _buildDecodePanel(colors)),
+                    ],
+                  ),
                 ),
               ],
+            ),
+          ),
+        ),
+        StatusStrip(
+          isConnected: _packets.isNotEmpty,
+          encoding: 'AX.25',
+          extraItems: [
+            StatusStripItem(text: '${_packets.length} PACKETS'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStreamHeader(ColorScheme colors) {
+    return Row(
+      children: [
+        Text(
+          'AX.25 PACKET STREAM',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: colors.onSurface,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: colors.primary.withAlpha(25),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            '${_packets.length} PACKETS',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              color: colors.primary,
+              letterSpacing: 1,
             ),
           ),
         ),
@@ -100,119 +162,83 @@ class _PacketsScreenState extends State<PacketsScreen> {
     );
   }
 
-  Widget _buildHeader(ColorScheme colors) {
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      color: colors.surfaceContainer,
-      child: Row(
-        children: [
-          Text(
-            'AX.25 PACKET STREAM',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-              color: colors.onSurface,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '${_packets.length} packets',
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.onSurfaceVariant,
-            ),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPacketTable(ColorScheme colors) {
     return GlassCard(
-      padding: const EdgeInsets.all(0),
+      padding: EdgeInsets.zero,
       child: _packets.isEmpty
           ? Center(
-              child: Text(
-                'No packets received',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: colors.outline,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.settings_input_antenna, size: 28, color: colors.outline),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No packets received',
+                    style: TextStyle(fontSize: 11, color: colors.outline),
+                  ),
+                ],
               ),
             )
           : SingleChildScrollView(
               child: SizedBox(
                 width: double.infinity,
                 child: DataTable(
-                  headingRowHeight: 36,
-                  dataRowMinHeight: 32,
+                  headingRowHeight: 32,
+                  dataRowMinHeight: 28,
                   dataRowMaxHeight: 32,
-                  columnSpacing: 20,
+                  columnSpacing: 16,
                   horizontalMargin: 14,
-                  headingRowColor: WidgetStateProperty.all(
-                    colors.surfaceContainerHigh,
+                  headingTextStyle: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: colors.onSurfaceVariant,
                   ),
-                  columns: [
-                    DataColumn(
-                      label:
-                          Text('TIME', style: _columnHeaderStyle(colors)),
-                    ),
-                    DataColumn(
-                      label:
-                          Text('FROM', style: _columnHeaderStyle(colors)),
-                    ),
-                    DataColumn(
-                      label:
-                          Text('TO', style: _columnHeaderStyle(colors)),
-                    ),
-                    DataColumn(
-                      label:
-                          Text('TYPE', style: _columnHeaderStyle(colors)),
-                    ),
-                    DataColumn(
-                      label: Text('CHANNEL',
-                          style: _columnHeaderStyle(colors)),
-                    ),
-                    DataColumn(
-                      label:
-                          Text('DATA', style: _columnHeaderStyle(colors)),
-                    ),
+                  dataTextStyle: TextStyle(fontSize: 11, color: colors.onSurface),
+                  columns: const [
+                    DataColumn(label: Text('TIMESTAMP')),
+                    DataColumn(label: Text('SOURCE > DEST')),
+                    DataColumn(label: Text('TYPE')),
+                    DataColumn(label: Text('PAYLOAD DATA')),
                   ],
                   rows: List.generate(_packets.length, (i) {
                     final p = _packets[i];
                     final selected = _selectedIndex == i;
                     final from = p.addresses.length > 1
                         ? p.addresses[1].toString()
-                        : '';
+                        : '?';
                     final to = p.addresses.isNotEmpty
                         ? p.addresses[0].toString()
-                        : '';
+                        : '?';
                     return DataRow(
                       selected: selected,
                       color: selected
-                          ? WidgetStateProperty.all(
-                              colors.primary.withAlpha(30),
-                            )
+                          ? WidgetStateProperty.all(colors.primary.withAlpha(30))
                           : null,
                       onSelectChanged: (_) {
                         setState(() => _selectedIndex = i);
                       },
                       cells: [
-                        DataCell(
-                            Text(_formatTime(p.time), style: _cellStyle(colors))),
-                        DataCell(
-                            Text(from, style: _cellStyle(colors))),
-                        DataCell(Text(to, style: _cellStyle(colors))),
-                        DataCell(
-                            Text(_getFrameTypeName(p), style: _cellStyle(colors))),
-                        DataCell(Text(p.channelName,
-                            style: _cellStyle(colors))),
+                        DataCell(Text(_formatTime(p.time),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontFamily: 'monospace',
+                              color: colors.onSurfaceVariant,
+                            ))),
+                        DataCell(Text('$from > $to',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: colors.primary,
+                            ))),
+                        DataCell(Text(_getFrameTypeName(p))),
                         DataCell(Text(
                           p.dataStr ?? '',
-                          style: _cellMonoStyle(colors),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                            color: colors.onSurface,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         )),
                       ],
@@ -225,25 +251,14 @@ class _PacketsScreenState extends State<PacketsScreen> {
   }
 
   Widget _buildDecodePanel(ColorScheme colors) {
-    final packet =
-        _selectedIndex != null && _selectedIndex! < _packets.length
-            ? _packets[_selectedIndex!]
-            : null;
+    final packet = _selectedIndex != null && _selectedIndex! < _packets.length
+        ? _packets[_selectedIndex!]
+        : null;
 
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'PACKET DECODE',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: colors.onSurfaceVariant,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 8),
           Expanded(
             child: Container(
               width: double.infinity,
@@ -256,10 +271,7 @@ class _PacketsScreenState extends State<PacketsScreen> {
                   ? Center(
                       child: Text(
                         'Select a packet to view decode',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colors.outline,
-                        ),
+                        style: TextStyle(fontSize: 11, color: colors.outline),
                       ),
                     )
                   : SingleChildScrollView(
@@ -281,30 +293,6 @@ class _PacketsScreenState extends State<PacketsScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  TextStyle _columnHeaderStyle(ColorScheme colors) {
-    return TextStyle(
-      fontSize: 9,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 1.5,
-      color: colors.onSurfaceVariant,
-    );
-  }
-
-  TextStyle _cellStyle(ColorScheme colors) {
-    return TextStyle(
-      fontSize: 12,
-      color: colors.onSurface,
-    );
-  }
-
-  TextStyle _cellMonoStyle(ColorScheme colors) {
-    return TextStyle(
-      fontSize: 11,
-      fontFamily: 'monospace',
-      color: colors.onSurface,
     );
   }
 }

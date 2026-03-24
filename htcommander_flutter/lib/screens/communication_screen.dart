@@ -1,5 +1,8 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import '../core/data_broker.dart';
 import '../core/data_broker_client.dart';
+import '../platform/linux/linux_audio_service.dart';
 import '../radio/models/radio_dev_info.dart';
 import '../radio/models/radio_ht_status.dart';
 import '../radio/models/radio_settings.dart';
@@ -10,9 +13,10 @@ import '../widgets/vfo_display.dart';
 import '../widgets/signal_bars.dart';
 import '../widgets/radio_status_card.dart';
 import '../widgets/ptt_button.dart';
+import '../widgets/status_strip.dart';
 
 /// Communication Hub — the flagship screen.
-/// Layout: Radio panel (left) + two-column content (right).
+/// Layout: Control panel (left, 320px) + content area (right).
 class CommunicationScreen extends StatefulWidget {
   const CommunicationScreen({super.key});
 
@@ -45,12 +49,15 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
   RadioSettings? _settings;
   List<RadioChannelInfo?> _channels = [];
 
+  // Audio I/O
+  LinuxMicCapture? _micCapture;
+  LinuxAudioOutput? _audioOutput;
+  bool _audioEnabled = false;
+
   @override
   void initState() {
     super.initState();
     _broker = DataBrokerClient();
-
-    // Load current state from DataBroker (screen may be rebuilt on tab switch)
     _loadCurrentState();
 
     _broker.subscribe(100, 'State', _onState);
@@ -61,6 +68,7 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
     _broker.subscribe(100, 'Channels', _onChannels);
     _broker.subscribe(100, 'BatteryAsPercentage', _onBattery);
     _broker.subscribe(100, 'Position', _onPosition);
+    _broker.subscribe(100, 'AudioState', _onAudioState);
   }
 
   void _loadCurrentState() {
@@ -84,42 +92,56 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
     }
 
     final settings = _broker.getValueDynamic(100, 'Settings');
-    if (settings is RadioSettings) {
-      _settings = settings;
-    }
+    if (settings is RadioSettings) _settings = settings;
 
     final channels = _broker.getValueDynamic(100, 'Channels');
-    if (channels is List) {
-      _channels = channels.cast<RadioChannelInfo?>();
-    }
+    if (channels is List) _channels = channels.cast<RadioChannelInfo?>();
 
     _batteryPercent = _broker.getValue<int>(100, 'BatteryAsPercentage', 0);
 
     final pos = _broker.getValueDynamic(100, 'Position');
-    if (pos is RadioPosition) {
-      _isGpsLocked = pos.isGpsLocked;
-    }
+    if (pos is RadioPosition) _isGpsLocked = pos.isGpsLocked;
 
     _updateVfoFromChannels();
   }
 
   @override
   void dispose() {
+    _stopMicCapture();
+    _audioOutput?.stop();
     _broker.dispose();
     _inputController.dispose();
     super.dispose();
   }
 
+  // ── DataBroker callbacks ──────────────────────────────────────────
+
   void _onState(int deviceId, String name, Object? data) {
     if (!mounted) return;
-    setState(() {
-      _isConnected = (data is String && data.toLowerCase() == 'connected');
-    });
+    final connected = (data is String && data.toLowerCase() == 'connected');
+    setState(() => _isConnected = connected);
+    if (!connected) {
+      _stopMicCapture();
+      _audioOutput?.stop();
+      _audioOutput = null;
+      if (mounted) setState(() => _audioEnabled = false);
+    }
+  }
+
+  void _onAudioState(int deviceId, String name, Object? data) {
+    if (!mounted || data is! bool) return;
+    setState(() => _audioEnabled = data);
+    if (data && _audioOutput == null && Platform.isLinux) {
+      _audioOutput = LinuxAudioOutput();
+      _audioOutput!.start(100);
+    } else if (!data) {
+      _audioOutput?.stop();
+      _audioOutput = null;
+    }
   }
 
   void _onInfo(int deviceId, String name, Object? data) {
     if (!mounted || data is! RadioDevInfo) return;
-    // Only set from Info if we don't already have a friendly name
     if (_deviceName == null || _deviceName!.startsWith('Radio ')) {
       setState(() => _deviceName = 'Radio ${data.productId}');
     }
@@ -156,22 +178,17 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
 
   void _onBattery(int deviceId, String name, Object? data) {
     if (!mounted || data is! int) return;
-    setState(() {
-      _batteryPercent = data;
-    });
+    setState(() => _batteryPercent = data);
   }
 
   void _onPosition(int deviceId, String name, Object? data) {
     if (!mounted || data is! RadioPosition) return;
-    setState(() {
-      _isGpsLocked = data.isGpsLocked;
-    });
+    setState(() => _isGpsLocked = data.isGpsLocked);
   }
 
   void _updateVfoFromChannels() {
     final settings = _settings;
     if (settings == null) return;
-
     final chA = settings.channelA;
     final chB = settings.channelB;
 
@@ -194,107 +211,88 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
     }
   }
 
+  // ── PTT ────────────────────────────────────────────────────────────
+
+  void _onPttStart() {
+    if (!_isConnected) return;
+    if (!_audioEnabled) {
+      DataBroker.dispatch(100, 'SetAudio', true, store: false);
+    }
+    if (Platform.isLinux) {
+      _micCapture ??= LinuxMicCapture();
+      _micCapture!.start(100);
+    }
+  }
+
+  void _onPttStop() {
+    _stopMicCapture();
+    DataBroker.dispatch(100, 'CancelVoiceTransmit', null, store: false);
+  }
+
+  void _stopMicCapture() {
+    _micCapture?.stop();
+    _micCapture = null;
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return Column(
       children: [
-        // Header bar
-        _buildHeader(colors),
-        // Main content
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Radio panel (left side)
+              // Left: Control panel
               SizedBox(
-                width: 280,
-                child: _buildRadioPanel(colors),
+                width: 320,
+                child: _buildControlPanel(colors),
               ),
-              // Content area (right side, two columns)
+              // Right: Content area
               Expanded(
-                child: _buildContentArea(colors),
+                child: Column(
+                  children: [
+                    // Quick controls bar
+                    _buildQuickControls(colors),
+                    // Two-column content
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _buildPacketNodeCard(colors)),
+                            const SizedBox(width: 14),
+                            Expanded(child: _buildOperationLog(colors)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Input bar
+                    _buildInputBar(colors),
+                  ],
+                ),
               ),
             ],
           ),
         ),
-        // Bottom input bar
-        _buildInputBar(colors),
+        // Status strip at very bottom
+        StatusStrip(isConnected: _isConnected),
       ],
     );
   }
 
-  Widget _buildHeader(ColorScheme colors) {
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      color: colors.surfaceContainer,
-      child: Row(
-        children: [
-          Text(
-            'Communication',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: colors.onSurface,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            _isConnected ? 'Connected' : 'Idle',
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.onSurfaceVariant,
-            ),
-          ),
-          const Spacer(),
-          // Send SSTV button
-          _HeaderButton(
-            label: 'Send SSTV',
-            onPressed: _isConnected ? () {} : null,
-          ),
-          const SizedBox(width: 6),
-          // Mute toggle
-          _HeaderToggle(
-            label: 'Mute',
-            isActive: _isMuted,
-            onPressed: () => setState(() => _isMuted = !_isMuted),
-          ),
-          const SizedBox(width: 6),
-          // Mode selector
-          Container(
-            height: 30,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: DropdownButton<String>(
-              value: _selectedMode,
-              underline: const SizedBox(),
-              isDense: true,
-              dropdownColor: colors.surfaceContainerHigh,
-              style: TextStyle(fontSize: 11, color: colors.onSurface),
-              items: ['Chat', 'Speak', 'Morse', 'DTMF']
-                  .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedMode = v!),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRadioPanel(ColorScheme colors) {
+  Widget _buildControlPanel(ColorScheme colors) {
     return Container(
       color: colors.surfaceContainerLow,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Column(
           children: [
-            // Radio status card
+            // Device status
             RadioStatusCard(
               deviceName: _deviceName,
               isConnected: _isConnected,
@@ -303,13 +301,30 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
               batteryPercent: _batteryPercent,
               isGpsLocked: _isGpsLocked,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+
+            // Frequency Matrix title
+            Row(
+              children: [
+                Text(
+                  'FREQUENCY MATRIX',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    color: colors.onSurfaceVariant,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
 
             // VFO A
             VfoDisplay(
               label: 'VFO A',
               frequency: _vfoAFreq,
               channelName: _vfoAName,
+              modulation: 'FM',
               isActive: true,
               isPrimary: true,
             ),
@@ -323,26 +338,16 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
               isActive: false,
               isPrimary: false,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
-            // PTT Button
+            // PTT Button with integrated label
             Center(
               child: PttButton(
                 isEnabled: _isConnected,
                 isTransmitting: _isTransmitting,
-                size: 72,
+                size: 80,
                 onPttStart: _onPttStart,
                 onPttStop: _onPttStop,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isTransmitting ? 'TRANSMITTING' : 'PRESS TO TALK',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 2,
-                color: _isTransmitting ? colors.error : colors.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 16),
@@ -369,6 +374,17 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
                       height: 14,
                     ),
                   ),
+                  const Spacer(),
+                  if (_rssi > 0)
+                    Text(
+                      '${-113 + _rssi} dBm',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: colors.onSurfaceVariant,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -378,29 +394,60 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
     );
   }
 
-  void _onPttStart() {
-    // Placeholder — will dispatch TransmitVoicePCM when audio pipeline is ready
-    _broker.dispatch(100, 'TransmitVoicePCM', null, store: false);
-  }
-
-  void _onPttStop() {
-    // No-op for now — PTT release handled by audio pipeline
-  }
-
-  Widget _buildContentArea(ColorScheme colors) {
-    return Padding(
-      padding: const EdgeInsets.all(14),
+  Widget _buildQuickControls(ColorScheme colors) {
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      color: colors.surfaceContainer,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left column: Local Packet Node / SSTV
-          Expanded(
-            child: _buildPacketNodeCard(colors),
+          Text(
+            'COMMUNICATION HUB',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: colors.onSurface,
+              letterSpacing: 1,
+            ),
           ),
-          const SizedBox(width: 14),
-          // Right column: Operation log
-          Expanded(
-            child: _buildOperationLog(colors),
+          const SizedBox(width: 12),
+          Text(
+            _isConnected ? 'Connected' : 'Idle',
+            style: TextStyle(
+              fontSize: 10,
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          _QuickButton(
+            label: 'Send SSTV',
+            onPressed: _isConnected ? () {} : null,
+          ),
+          const SizedBox(width: 6),
+          _QuickButton(
+            label: _isMuted ? 'Unmute' : 'Mute',
+            isActive: _isMuted,
+            onPressed: () => setState(() => _isMuted = !_isMuted),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: DropdownButton<String>(
+              value: _selectedMode,
+              underline: const SizedBox(),
+              isDense: true,
+              dropdownColor: colors.surfaceContainerHigh,
+              style: TextStyle(fontSize: 11, color: colors.onSurface),
+              items: ['Chat', 'Speak', 'Morse', 'DTMF']
+                  .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedMode = v!),
+            ),
           ),
         ],
       ),
@@ -433,6 +480,8 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Icon(Icons.satellite_alt, size: 32, color: colors.outline),
+                  const SizedBox(height: 8),
                   Text(
                     'SSTV / DATA LINK',
                     style: TextStyle(
@@ -441,13 +490,10 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
                       color: colors.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     'Waiting for incoming data...',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colors.outline,
-                    ),
+                    style: TextStyle(fontSize: 11, color: colors.outline),
                   ),
                 ],
               ),
@@ -530,12 +576,16 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
           Expanded(
             child: _messages.isEmpty
                 ? Center(
-                    child: Text(
-                      'No messages yet',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: colors.outline,
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.chat_bubble_outline, size: 28, color: colors.outline),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No messages yet',
+                          style: TextStyle(fontSize: 11, color: colors.outline),
+                        ),
+                      ],
                     ),
                   )
                 : ListView.separated(
@@ -543,17 +593,14 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
                     separatorBuilder: (_, _) => const SizedBox(height: 6),
                     itemBuilder: (context, index) {
                       return Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: colors.surfaceContainerLow,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           _messages[index],
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.onSurface,
-                          ),
+                          style: TextStyle(fontSize: 12, color: colors.onSurface),
                         ),
                       );
                     },
@@ -570,6 +617,16 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
       color: colors.surfaceContainerLow,
       child: Row(
         children: [
+          Text(
+            '>',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: colors.primary,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _inputController,
@@ -577,16 +634,13 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
               decoration: InputDecoration(
                 hintText: 'Type message...',
                 hintStyle: TextStyle(fontSize: 12, color: colors.outline),
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(4),
-                  borderSide: BorderSide(color: colors.outlineVariant),
+                  borderSide: BorderSide(color: colors.outlineVariant.withAlpha(38)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(4),
-                  borderSide: BorderSide(color: colors.outlineVariant),
+                  borderSide: BorderSide(color: colors.outlineVariant.withAlpha(38)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(4),
@@ -606,10 +660,7 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4),
               ),
-              textStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             child: const Text('Transmit'),
           ),
@@ -633,7 +684,6 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
   void _sendMessage() {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
-    // Dispatch chat message via DataBroker
     _broker.dispatch(1, 'Chat', text, store: false);
     setState(() {
       _messages.add(text);
@@ -642,39 +692,15 @@ class _CommunicationScreenState extends State<CommunicationScreen> {
   }
 }
 
-class _HeaderButton extends StatelessWidget {
-  const _HeaderButton({required this.label, this.onPressed});
+class _QuickButton extends StatelessWidget {
+  const _QuickButton({required this.label, this.onPressed, this.isActive = false});
   final String label;
   final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        minimumSize: Size.zero,
-        textStyle: const TextStyle(fontSize: 11),
-      ),
-      child: Text(label),
-    );
-  }
-}
-
-class _HeaderToggle extends StatelessWidget {
-  const _HeaderToggle({
-    required this.label,
-    required this.isActive,
-    this.onPressed,
-  });
-  final String label;
   final bool isActive;
-  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
@@ -696,7 +722,6 @@ class _MiniStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
