@@ -91,6 +91,65 @@ class CorrectionInfo {
     this.expectedCrc = 0,
     this.crcValid = false,
   }) : correctedBitPositions = correctedBitPositions ?? [];
+
+  /// Calculate bit error rate (BER) based on corrections.
+  double calculateBER() {
+    if (frameLengthBits <= 0) return 0.0;
+
+    int bitsFlipped = correctedBitPositions.length;
+
+    // For FX.25, estimate bits corrected (8 bits per symbol)
+    if (fecType == FecType.fx25 && rsSymbolsCorrected > 0) {
+      bitsFlipped = rsSymbolsCorrected * 8;
+    }
+
+    return bitsFlipped / frameLengthBits;
+  }
+
+  /// Get a human-readable description of the correction.
+  String getDescription() {
+    if (fecType == FecType.fx25) {
+      if (rsSymbolsCorrected == 0) return 'FX.25: No errors detected';
+      if (rsSymbolsCorrected > 0) {
+        return 'FX.25: Corrected $rsSymbolsCorrected symbol(s), '
+            'Tag=0x${fx25CorrelationTag.toRadixString(16).toUpperCase().padLeft(2, '0')}';
+      }
+      return 'FX.25: Too many errors to correct';
+    } else if (fecType == FecType.il2p) {
+      if (rsSymbolsCorrected == 0) return 'IL2P: No errors detected';
+      if (rsSymbolsCorrected > 0) {
+        return 'IL2P: Corrected $rsSymbolsCorrected symbol(s)';
+      }
+      return 'IL2P: Too many errors to correct';
+    } else {
+      switch (correctionType) {
+        case RetryType.none:
+          return crcValid ? 'No correction needed' : 'Bad CRC (passed through)';
+        case RetryType.invertSingle:
+          return 'Fixed by inverting 1 bit at position '
+              '${correctedBitPositions.isNotEmpty ? correctedBitPositions.first : 0}';
+        case RetryType.invertDouble:
+          return 'Fixed by inverting 2 adjacent bits at positions '
+              '${correctedBitPositions.join(",")}';
+        case RetryType.invertTriple:
+          return 'Fixed by inverting 3 adjacent bits at positions '
+              '${correctedBitPositions.join(",")}';
+        case RetryType.invertTwoSep:
+          return 'Fixed by inverting 2 separated bits at positions '
+              '${correctedBitPositions.join(",")}';
+        case RetryType.max:
+          return 'Bad CRC (passed through)';
+      }
+    }
+  }
+
+  @override
+  String toString() {
+    final fecInfo = fecType != FecType.none ? ', FEC=$fecType' : '';
+    final berInfo =
+        frameLengthBits > 0 ? ', BER=${calculateBER().toStringAsExponential(2)}' : '';
+    return 'Correction: ${getDescription()}$fecInfo$berInfo';
+  }
 }
 
 /// Event payload for decoded HDLC frames.

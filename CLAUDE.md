@@ -55,7 +55,7 @@ All servers default to loopback. MCP requires Bearer token when `ServerBindAll` 
 
 ## HTCommander-X Flutter Rewrite (`htcommander_flutter/`)
 
-Full Dart/Flutter rewrite targeting Linux desktop, Windows, and Android. Uses "Signal Protocol" design system (dark base `#0c0e17`, cyan primary `#3cd7ff`, glassmorphism, Inter font). Stitch project "HTCommander-X: New UI" is the design reference. ~183 source files, ~49K LOC, 199 tests.
+Full Dart/Flutter rewrite targeting Linux desktop, Windows, and Android. Uses "Signal Protocol" design system (dark base `#0c0e17`, cyan primary `#3cd7ff`, glassmorphism, Inter font). Stitch project "HTCommander-X: New UI" is the design reference. ~190 source files, ~53K LOC, 199 tests.
 
 ### Prerequisites
 
@@ -87,9 +87,9 @@ Note: Flutter SDK is at `~/flutter/bin/flutter` (not on PATH by default).
 **Key directories**:
 - `core/` — DataBroker pub/sub, DataBrokerClient, SharedPreferences SettingsStore
 - `radio/` — GAIA state machine (76 basic + 6 extended commands), SBC codec, morse/DTMF
-- `radio/modem/` — Software packet modem: DSP, AFSK 1200, 9600 G3RUH, PSK, HDLC, FX.25 (Reed-Solomon FEC), MultiModem
+- `radio/modem/` — Software packet modem: DSP, AFSK 1200, 9600 G3RUH, PSK, HDLC (v1 + v2 with error correction), FX.25 (Reed-Solomon FEC), MultiModem, AudioBuffer, AudioConfig
 - `radio/sstv/` — SSTV encoder/decoder (20+ modes: Robot, Scottie, Martin, Wraase, PD, HF Fax), SstvMonitor, FFT, DSP
-- `radio/ax25/` — AX.25 packet/address/session
+- `radio/ax25/` — AX.25 packet/address/session, raw frame assembler (Ax25Pad/Pad2), data link state machine (Ax25Link)
 - `radio/aprs/` — APRS packet parser, position, message, weather
 - `radio/gps/` — NMEA 0183 parser (GGA, RMC, GSA, GSV, VTG, GLL, ZDA), GPS data model
 - `handlers/` — 20+ DataBroker handlers (FrameDeduplicator, PacketStore, AprsHandler, LogStore, LogFileHandler, MailStore, VoiceHandler, AudioClipHandler, TorrentHandler, BbsHandler, WinlinkClient, WinlinkGatewayRelay, YappTransfer, RepeaterBookClient, ImportUtils, AdifExport, GpsSerialHandler, AirplaneHandler, VirtualAudioBridge, FileDownloader, server stubs on mobile). `winlink_utils.dart` has LZHUF compression, CRC16, checksum, and auth security for B2F protocol.
