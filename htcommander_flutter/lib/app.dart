@@ -10,6 +10,7 @@ import 'radio/models/radio_channel_info.dart';
 import 'platform/bluetooth_service.dart';
 import 'platform/linux/linux_platform_services.dart';
 import 'platform/windows/windows_platform_services.dart';
+import 'dialogs/radio_connection_dialog.dart';
 import 'theme/signal_protocol_theme.dart';
 import 'widgets/sidebar_nav.dart';
 import 'screens/communication_screen.dart';
@@ -109,7 +110,7 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
 
-    _radioMac = DataBroker.getValue<String>(0, 'LastRadioMac', '38:D2:00:01:04:E2');
+    _radioMac = DataBroker.getValue<String>(0, 'LastRadioMac', '');
     _callSign = DataBroker.getValue<String>(0, 'CallSign', 'N0CALL');
 
     _initPlatformServices();
@@ -272,8 +273,6 @@ class _AppShellState extends State<AppShell> {
   void _onPowerTap() {
     if (_isConnected || _isConnecting) {
       _disconnectRadio();
-    } else if (_radioMac.isNotEmpty) {
-      _connectToRadio(_radioMac);
     } else {
       _showConnectDialog();
     }
@@ -338,71 +337,32 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _showConnectDialog() {
-    final controller = TextEditingController(text: _radioMac);
-    showDialog(
+    if (_platformServices == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bluetooth not available on this platform'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    showDialog<Map<String, String>>(
       context: context,
-      builder: (ctx) {
-        final colors = Theme.of(ctx).colorScheme;
-        return AlertDialog(
-          backgroundColor: colors.surfaceContainerHigh,
-          title: Text(
-            'CONNECT RADIO',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-              color: colors.onSurface,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'BLUETOOTH MAC ADDRESS',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                  color: colors.onSurfaceVariant,
-                  letterSpacing: 1,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: controller,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                  color: colors.onSurface,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'XX:XX:XX:XX:XX:XX',
-                  hintStyle: TextStyle(color: colors.outline),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Compatible: UV-Pro, VR-N76, VR-N7500, GA-5WB, RT-660',
-                style: TextStyle(fontSize: 10, color: colors.outline),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _connectToRadio(controller.text.trim());
-              },
-              child: const Text('Connect'),
-            ),
-          ],
-        );
-      },
-    );
+      builder: (ctx) => RadioConnectionDialog(
+        scanForDevices: _platformServices!.scanForDevices,
+        lastMac: _radioMac,
+      ),
+    ).then((result) {
+      if (result == null) return;
+      final action = result['action'] ?? '';
+      final mac = result['mac'] ?? '';
+      if (action == 'connect' && mac.isNotEmpty) {
+        _connectToRadio(mac);
+      } else if (action == 'disconnect') {
+        _disconnectRadio();
+      }
+    });
   }
 
   // ── Navigation ─────────────────────────────────────────────────────
