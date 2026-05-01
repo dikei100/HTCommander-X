@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-HTCommander-X is a ham radio controller for Bluetooth-enabled handhelds (UV-Pro, UV-50Pro, GA-5WB, VR-N75, VR-N76, VR-N7500, VR-N7600, RT-660). Built with Flutter, targeting Linux desktop, Windows, and Android.
+HTCommander-X is a ham radio controller for Bluetooth-enabled handhelds (UV-Pro, UV-50Pro, GA-5WB, DB50-B, VR-N75, VR-N76, VR-N7500, VR-N7600, RT-660). Built with Flutter, targeting Linux desktop, Windows, and Android.
 
-Two git remotes: `origin` (Ylianst/HTCommander upstream), `fork` (dikei100/HTCommander-X). Push to `fork` with `--tags` to trigger releases.
+Two git remotes: `origin` (dikei100/HTCommander-X fork), `upstream` (Ylianst/HTCommander original C# project). Push to `origin` with `--tags` to trigger releases.
 
 Uses "Signal Protocol" design system (dark base `#0c0e17`, cyan primary `#3cd7ff`, glassmorphism, Inter font). Stitch project "HTCommander-X: New UI" is the design reference. ~190 source files, ~53K LOC, 199 tests.
 
