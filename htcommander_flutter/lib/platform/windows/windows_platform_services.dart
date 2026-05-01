@@ -22,6 +22,7 @@ const List<String> _targetDeviceNames = [
   'VR-N7500',
   'VR-N7600',
   'RT-660',
+  'DB50-B',
 ];
 
 /// Windows platform services using Winsock2 RFCOMM and winmm.dll audio.

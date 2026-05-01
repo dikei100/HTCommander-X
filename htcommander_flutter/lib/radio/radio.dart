@@ -503,7 +503,12 @@ class Radio {
         break;
 
       case _BasicCmd.writeSettings:
-        if (value[4] != 0) debug('WRITE_SETTINGS ERROR: ${BinaryUtils.bytesToHex(value)}');
+        if (value[4] != 0) {
+          debug('WRITE_SETTINGS ERROR: ${BinaryUtils.bytesToHex(value)}');
+        } else {
+          // Re-read settings — some radios don't emit a SETTINGS change notification after write
+          _sendCommand(_CommandGroup.basic, _BasicCmd.readSettings);
+        }
         break;
 
       case _BasicCmd.getPosition:

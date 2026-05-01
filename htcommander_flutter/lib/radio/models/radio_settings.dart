@@ -23,7 +23,7 @@ class RadioSettings {
   bool adaptiveResponse;
   bool disTone;
   bool powerSavingMode;
-  int autoPowerOff; // 0-8
+  int autoPowerOff; // 3 bits, 0 to 7
   int autoShareLocCh; // 5 bits
   int hmSpeaker; // 2 bits
   int positioningSystem; // 4 bits
@@ -66,7 +66,7 @@ class RadioSettings {
         adaptiveResponse = (msg[9] & 0x04) != 0,
         disTone = (msg[9] & 0x02) != 0,
         powerSavingMode = (msg[9] & 0x01) != 0,
-        autoPowerOff = msg[10] >> 4,
+        autoPowerOff = msg[10] >> 5,
         autoShareLocCh = msg[10] & 0x1F,
         hmSpeaker = msg[11] >> 6,
         positioningSystem = (msg[11] & 0x3C) >> 2,

@@ -479,6 +479,9 @@ class AX25Session {
     if (data is! TncDataFragment) return;
     if (data.radioDeviceId != _radioDeviceId) return;
 
+    // Skip our own outgoing packets - only process incoming frames
+    if (!data.incoming) return;
+
     final packet = AX25Packet.decodeAx25Packet(data);
     if (packet == null) return;
 

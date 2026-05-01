@@ -16,6 +16,7 @@ const List<String> _targetDeviceNames = [
   'VR-N7500',
   'VR-N7600',
   'RT-660',
+  'DB50-B',
 ];
 
 /// Linux platform services using native RFCOMM sockets and BlueZ CLI tools.

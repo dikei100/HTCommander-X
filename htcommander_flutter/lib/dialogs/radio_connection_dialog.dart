@@ -348,7 +348,7 @@ class _RadioConnectionDialogState extends State<RadioConnectionDialog> {
         ),
         const SizedBox(height: 12),
         Text(
-          'Compatible: UV-Pro, UV-50Pro, GA-5WB, VR-N75, VR-N76, VR-N7500, VR-N7600, RT-660',
+          'Compatible: UV-Pro, UV-50Pro, GA-5WB, VR-N75, VR-N76, VR-N7500, VR-N7600, RT-660, DB50-B',
           style: TextStyle(fontSize: 10, color: colors.outline),
         ),
       ],
