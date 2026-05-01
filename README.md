@@ -145,7 +145,8 @@ The following radios should work with this application:
 
 - BTech UV-Pro
 - BTech UV-50Pro (untested)
-- RadioOddity GA-5WB (untested)
+- Radioddity GA-5WB (untested)
+- Radioddity DB50-B Mini
 - Radtel RT-660 (Contact Developers)
 - Vero VR-N75
 - Vero VR-N76 (untested)
@@ -173,6 +174,10 @@ Handi-Talky Commander is starting to have a lot of features.
 - [Audio Clips](https://github.com/Ylianst/HTCommander/blob/main/docs/Voice-Clips.md) record and playback short voice clips on demand.
 - [AGWPE Protocol](https://github.com/Ylianst/HTCommander/blob/main/docs/Agwpe.md). Supports routing other application's traffic over the radio using the AGWPE protocol.
 - [APSK 1200 Software modem](https://github.com/Ylianst/HTCommander/blob/main/docs/SoftModem.md) with ECC/CRC error correction support.
+
+### Installation (Windows — original upstream)
+
+Download the [MSI Installer](https://github.com/Ylianst/HTCommander/raw/refs/heads/main/releases/HTCommander-0.62.msi). Except for Open Street Map data, and checking for updates on GitHub, this tool does not sent data on the Internet. Pair your radio to your computer and run the application. If your computer does not have Bluetooth, you can get a inexpensive Bluetooth USB dongle. Make sure Bluetooth LE is supported. Pairing can be a bit tricky, you have to pair TWO Bluetooth devices in quick succession, [Bluetooth pairing instructions here](https://github.com/Ylianst/HTCommander/blob/main/docs/Paring.md).
 
 ### Demonstration Video
 
